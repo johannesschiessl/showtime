@@ -104,33 +104,36 @@ export const makeNumberedResourceService = Effect.fnUntraced(function* <
 
   const edit: NumberedResourceServiceShape<Resource, Id, Number>["edit"] = Effect.fnUntraced(
     function* (params) {
-      const found = yield* repository.findById(params.showId);
-      const resources = config.getResources(found);
-      const existing = resources.find(
-        (resource) => resource.id === params.id && resource.deletedAt === undefined,
-      );
-      if (existing === undefined) {
-        return yield* Effect.fail(new RpcError({ message: `${capitalizedName} not found.` }));
-      }
-
       const trimmedName = params.name?.trim();
       const now = yield* DateTime.now;
-      const existingForUpdate = params.name === undefined ? existing : removeName(existing);
-      const resource = {
-        ...existingForUpdate,
-        number: params.number,
-        color: params.color,
-        updatedAt: now,
-        ...(trimmedName ? { name: trimmedName } : {}),
-      } as Resource;
-      yield* repository
-        .update(params.showId, (document) =>
-          config.withResources(
+      const updated = yield* repository
+        .update(params.showId, (document) => {
+          const resources = config.getResources(document);
+          const existing = resources.find(
+            (resource) => resource.id === params.id && resource.deletedAt === undefined,
+          );
+          if (existing === undefined) return document;
+
+          const existingForUpdate = params.name === undefined ? existing : removeName(existing);
+          const resource = {
+            ...existingForUpdate,
+            number: params.number,
+            color: params.color,
+            updatedAt: now,
+            ...(trimmedName ? { name: trimmedName } : {}),
+          } as Resource;
+          return config.withResources(
             document,
-            config.getResources(document).map((item) => (item.id === params.id ? resource : item)),
-          ),
-        )
+            resources.map((item) => (item.id === params.id ? resource : item)),
+          );
+        })
         .pipe(Effect.mapError(toRpcError(`Could not edit ${config.resourceName}.`)));
+      const resource = config
+        .getResources(updated)
+        .find((item) => item.id === params.id && item.deletedAt === undefined);
+      if (resource === undefined) {
+        return yield* Effect.fail(new RpcError({ message: `${capitalizedName} not found.` }));
+      }
       return resource;
     },
   );
