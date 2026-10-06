@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
+import { nextNumberedResourceNumber } from "./numbered-resource.js";
 
 export const microphoneIdPrefix = "mic_";
 const microphoneIdPattern = new RegExp(`^${microphoneIdPrefix}[${idAlphabet}]{${idSuffixLength}}$`);
@@ -25,17 +26,8 @@ export const MicrophoneNumber = Schema.String.pipe(
 );
 export type MicrophoneNumber = typeof MicrophoneNumber.Type;
 
-const canonicalPositiveIntegerPattern = /^[1-9]\d*$/;
-
-export const nextMicrophoneNumber = (numbers: Iterable<string>): MicrophoneNumber => {
-  let maximum = 0;
-  for (const number of numbers) {
-    if (!canonicalPositiveIntegerPattern.test(number)) continue;
-    const value = Number(number);
-    if (Number.isSafeInteger(value)) maximum = Math.max(maximum, value);
-  }
-  return MicrophoneNumber.make(String(maximum + 1));
-};
+export const nextMicrophoneNumber = (numbers: Iterable<string>): MicrophoneNumber =>
+  MicrophoneNumber.make(nextNumberedResourceNumber(numbers));
 
 export const Microphone = Schema.Struct({
   id: MicrophoneId,

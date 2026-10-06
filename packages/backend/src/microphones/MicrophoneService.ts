@@ -1,122 +1,31 @@
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, Layer } from "effect";
 import {
-  RpcError,
+  nextMicrophoneNumber,
   type Microphone,
   type MicrophoneId,
-  nextMicrophoneNumber,
   type MicrophoneNumber,
-  type Color,
-  type ShowId,
 } from "@showtime/contracts";
-import { Ids } from "../ids/Ids.js";
-import { ShowRepository } from "../shows/ShowRepository.js";
+import {
+  makeNumberedResourceService,
+  type NumberedResourceServiceShape,
+} from "../numbered-resources/NumberedResourceService.js";
 
-interface MicrophoneServiceShape {
-  readonly list: (showId: ShowId) => Effect.Effect<ReadonlyArray<Microphone>, RpcError>;
-  readonly create: (params: {
-    readonly showId: ShowId;
-    readonly color: Color;
-  }) => Effect.Effect<Microphone, RpcError>;
-  readonly edit: (params: {
-    readonly showId: ShowId;
-    readonly id: MicrophoneId;
-    readonly number: MicrophoneNumber;
-    readonly color: Color;
-    readonly name?: string;
-  }) => Effect.Effect<Microphone, RpcError>;
-  readonly delete: (params: {
-    readonly showId: ShowId;
-    readonly id: MicrophoneId;
-  }) => Effect.Effect<void, RpcError>;
-}
+type MicrophoneServiceShape = NumberedResourceServiceShape<
+  Microphone,
+  MicrophoneId,
+  MicrophoneNumber
+>;
 
 export class MicrophoneService extends Context.Service<MicrophoneService, MicrophoneServiceShape>()(
   "@showtime/backend/microphones/MicrophoneService",
 ) {}
 
-const toRpcError = (message: string) => (cause: unknown) => new RpcError({ message, cause });
-
-const make = Effect.fnUntraced(function* () {
-  const ids = yield* Ids;
-  const repository = yield* ShowRepository;
-
-  const list: MicrophoneServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).microphones.filter(
-      (microphone) => microphone.deletedAt === undefined,
-    );
-  });
-
-  const create: MicrophoneServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
-    const id = yield* ids.makeMicrophoneId;
-    const now = yield* DateTime.now;
-    const updated = yield* repository
-      .update(showId, (document) => {
-        const number = nextMicrophoneNumber(
-          document.microphones
-            .filter((microphone) => microphone.deletedAt === undefined)
-            .map((microphone) => microphone.number),
-        );
-        const microphone: Microphone = { id, number, color, createdAt: now, updatedAt: now };
-        return { ...document, microphones: [...document.microphones, microphone] };
-      })
-      .pipe(Effect.mapError(toRpcError("Could not add microphone.")));
-    return updated.microphones.find((microphone) => microphone.id === id)!;
-  });
-
-  const edit: MicrophoneServiceShape["edit"] = Effect.fnUntraced(function* (params) {
-    const found = yield* repository.findById(params.showId);
-    const existing = found.microphones.find(
-      (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
-    );
-    if (existing === undefined) {
-      return yield* Effect.fail(new RpcError({ message: "Microphone not found." }));
-    }
-    const trimmedName = params.name?.trim();
-    const now = yield* DateTime.now;
-    const existingForUpdate =
-      params.name === undefined
-        ? existing
-        : (({ name: _existingName, ...existingWithoutName }) => existingWithoutName)(existing);
-    const microphone: Microphone = {
-      ...existingForUpdate,
-      id: params.id,
-      number: params.number,
-      color: params.color,
-      updatedAt: now,
-      ...(trimmedName ? { name: trimmedName } : {}),
-    };
-    yield* repository
-      .update(params.showId, (document) => ({
-        ...document,
-        microphones: document.microphones.map((mic) => (mic.id === params.id ? microphone : mic)),
-      }))
-      .pipe(Effect.mapError(toRpcError("Could not edit microphone.")));
-    return microphone;
-  });
-
-  const deleteMicrophone: MicrophoneServiceShape["delete"] = Effect.fnUntraced(function* (params) {
-    const found = yield* repository.findById(params.showId);
-    if (
-      !found.microphones.some(
-        (microphone) => microphone.id === params.id && microphone.deletedAt === undefined,
-      )
-    ) {
-      return yield* Effect.fail(new RpcError({ message: "Microphone not found." }));
-    }
-    const now = yield* DateTime.now;
-    yield* repository
-      .update(params.showId, (document) => ({
-        ...document,
-        microphones: document.microphones.map((microphone) =>
-          microphone.id === params.id
-            ? { ...microphone, updatedAt: now, deletedAt: now }
-            : microphone,
-        ),
-      }))
-      .pipe(Effect.mapError(toRpcError("Could not delete microphone.")));
-  });
-
-  return MicrophoneService.of({ list, create, edit, delete: deleteMicrophone });
+const make = makeNumberedResourceService<Microphone, MicrophoneId, MicrophoneNumber>({
+  resourceName: "microphone",
+  getResources: (document) => document.microphones,
+  withResources: (document, microphones) => ({ ...document, microphones }),
+  makeId: (ids) => ids.makeMicrophoneId,
+  nextNumber: nextMicrophoneNumber,
 });
 
-export const layer = Layer.effect(MicrophoneService, make());
+export const layer = Layer.effect(MicrophoneService, make);

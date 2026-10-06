@@ -19,18 +19,17 @@ import {
   chatPresetIdPrefix,
 } from "@showtime/contracts";
 
-export class Ids extends Context.Service<
-  Ids,
-  {
-    readonly makeShowId: Effect.Effect<ShowId>;
-    readonly makeMicrophoneId: Effect.Effect<MicrophoneId>;
-    readonly makeMixId: Effect.Effect<MixId>;
-    readonly makeProfileId: Effect.Effect<ProfileId>;
-    readonly makeChatChannelId: Effect.Effect<ChatChannelId>;
-    readonly makeChatMessageId: Effect.Effect<ChatMessageId>;
-    readonly makeChatPresetId: Effect.Effect<ChatPresetId>;
-  }
->()("@showtime/backend/ids/Ids") {}
+export interface IdsShape {
+  readonly makeShowId: Effect.Effect<ShowId>;
+  readonly makeMicrophoneId: Effect.Effect<MicrophoneId>;
+  readonly makeMixId: Effect.Effect<MixId>;
+  readonly makeProfileId: Effect.Effect<ProfileId>;
+  readonly makeChatChannelId: Effect.Effect<ChatChannelId>;
+  readonly makeChatMessageId: Effect.Effect<ChatMessageId>;
+  readonly makeChatPresetId: Effect.Effect<ChatPresetId>;
+}
+
+export class Ids extends Context.Service<Ids, IdsShape>()("@showtime/backend/ids/Ids") {}
 
 const makeId = customAlphabet(idAlphabet, idSuffixLength);
 

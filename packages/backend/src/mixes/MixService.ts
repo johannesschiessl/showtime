@@ -1,119 +1,29 @@
-import { Context, DateTime, Effect, Layer } from "effect";
+import { Context, Layer } from "effect";
 import {
   mainMixId,
-  MixId,
-  MixNumber,
-  RpcError,
-  type Color,
+  nextMixNumber,
   type Mix,
-  type ShowId,
+  type MixId,
+  type MixNumber,
 } from "@showtime/contracts";
-import { Ids } from "../ids/Ids.js";
-import { ShowRepository } from "../shows/ShowRepository.js";
+import {
+  makeNumberedResourceService,
+  type NumberedResourceServiceShape,
+} from "../numbered-resources/NumberedResourceService.js";
 
-interface MixServiceShape {
-  readonly list: (showId: ShowId) => Effect.Effect<ReadonlyArray<Mix>, RpcError>;
-  readonly create: (params: {
-    readonly showId: ShowId;
-    readonly color: Color;
-  }) => Effect.Effect<Mix, RpcError>;
-  readonly edit: (params: {
-    readonly showId: ShowId;
-    readonly id: MixId;
-    readonly number: MixNumber;
-    readonly color: Color;
-    readonly name?: string;
-  }) => Effect.Effect<Mix, RpcError>;
-  readonly delete: (params: {
-    readonly showId: ShowId;
-    readonly id: MixId;
-  }) => Effect.Effect<void, RpcError>;
-}
+type MixServiceShape = NumberedResourceServiceShape<Mix, MixId, MixNumber>;
 
 export class MixService extends Context.Service<MixService, MixServiceShape>()(
   "@showtime/backend/mixes/MixService",
 ) {}
 
-const toRpcError = (message: string) => (cause: unknown) => new RpcError({ message, cause });
-
-const make = Effect.fnUntraced(function* () {
-  const ids = yield* Ids;
-  const repository = yield* ShowRepository;
-
-  const list: MixServiceShape["list"] = Effect.fnUntraced(function* (showId) {
-    return (yield* repository.findById(showId)).mixes.filter((mix) => mix.deletedAt === undefined);
-  });
-
-  const create: MixServiceShape["create"] = Effect.fnUntraced(function* ({ showId, color }) {
-    const id = yield* ids.makeMixId;
-    const now = yield* DateTime.now;
-    const updated = yield* repository
-      .update(showId, (document) => {
-        const number = MixNumber.make(
-          String(
-            Math.max(
-              0,
-              ...document.mixes
-                .filter((mix) => mix.deletedAt === undefined)
-                .map((mix) => Number(mix.number))
-                .filter(Number.isSafeInteger),
-            ) + 1,
-          ),
-        );
-        const mix: Mix = { id, number, color, createdAt: now, updatedAt: now };
-        return { ...document, mixes: [...document.mixes, mix] };
-      })
-      .pipe(Effect.mapError(toRpcError("Could not add mix.")));
-    return updated.mixes.find((mix) => mix.id === id)!;
-  });
-
-  const edit: MixServiceShape["edit"] = Effect.fnUntraced(function* (params) {
-    const found = yield* repository.findById(params.showId);
-    const existing = found.mixes.find((mix) => mix.id === params.id && mix.deletedAt === undefined);
-    if (existing === undefined)
-      return yield* Effect.fail(new RpcError({ message: "Mix not found." }));
-    const trimmedName = params.name?.trim();
-    const now = yield* DateTime.now;
-    const existingForUpdate =
-      params.name === undefined
-        ? existing
-        : (({ name: _name, ...withoutName }) => withoutName)(existing);
-    const mix: Mix = {
-      ...existingForUpdate,
-      number: params.number,
-      color: params.color,
-      updatedAt: now,
-      ...(trimmedName ? { name: trimmedName } : {}),
-    };
-    yield* repository
-      .update(params.showId, (document) => ({
-        ...document,
-        mixes: document.mixes.map((item) => (item.id === params.id ? mix : item)),
-      }))
-      .pipe(Effect.mapError(toRpcError("Could not edit mix.")));
-    return mix;
-  });
-
-  const deleteMix: MixServiceShape["delete"] = Effect.fnUntraced(function* (params) {
-    if (params.id === mainMixId) {
-      return yield* Effect.fail(new RpcError({ message: "The main mix cannot be deleted." }));
-    }
-    const found = yield* repository.findById(params.showId);
-    if (!found.mixes.some((mix) => mix.id === params.id && mix.deletedAt === undefined)) {
-      return yield* Effect.fail(new RpcError({ message: "Mix not found." }));
-    }
-    const now = yield* DateTime.now;
-    yield* repository
-      .update(params.showId, (document) => ({
-        ...document,
-        mixes: document.mixes.map((mix) =>
-          mix.id === params.id ? { ...mix, updatedAt: now, deletedAt: now } : mix,
-        ),
-      }))
-      .pipe(Effect.mapError(toRpcError("Could not delete mix.")));
-  });
-
-  return MixService.of({ list, create, edit, delete: deleteMix });
+const make = makeNumberedResourceService<Mix, MixId, MixNumber>({
+  resourceName: "mix",
+  getResources: (document) => document.mixes,
+  withResources: (document, mixes) => ({ ...document, mixes }),
+  makeId: (ids) => ids.makeMixId,
+  nextNumber: nextMixNumber,
+  deleteBlockedMessage: (id) => (id === mainMixId ? "The main mix cannot be deleted." : undefined),
 });
 
-export const layer = Layer.effect(MixService, make());
+export const layer = Layer.effect(MixService, make);

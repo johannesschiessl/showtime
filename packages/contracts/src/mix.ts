@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { Color } from "./color.js";
 import { idAlphabet, idSuffixLength } from "./ids.js";
+import { nextNumberedResourceNumber } from "./numbered-resource.js";
 
 export const mainMixId = "mix_main" as const;
 export const mixIdPrefix = "mix_";
@@ -27,6 +28,9 @@ export const MixNumber = Schema.String.pipe(
   Schema.brand("MixNumber"),
 );
 export type MixNumber = typeof MixNumber.Type;
+
+export const nextMixNumber = (numbers: Iterable<string>): MixNumber =>
+  MixNumber.make(nextNumberedResourceNumber(numbers));
 
 export const Mix = Schema.Struct({
   id: MixId,
