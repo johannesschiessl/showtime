@@ -145,29 +145,37 @@ function NumberedResourceCard<Item extends NumberedResourceEditorItem>({
   const [name, setName] = React.useState(item.name ?? "");
   const [color, setColor] = React.useState(item.color);
   const [saveError, setSaveError] = React.useState<string>();
+  const committedItem = React.useRef<NumberedResourceEditorItem>(item);
+  const pendingSave = React.useRef<Promise<MutationResult> | undefined>(undefined);
 
   React.useEffect(() => {
     setNumber(String(item.number));
     setName(item.name ?? "");
     setColor(item.color);
-    setSaveError(undefined);
+    committedItem.current = item;
   }, [item.color, item.name, item.number]);
 
-  const save = async (next: { number?: string; name?: string; color?: Color }) => {
-    setSaveError(undefined);
-    const result = await onEdit({
-      id: item.id,
-      number: ((next.number ?? number.trim()) || item.number) as Item["number"],
-      color: next.color ?? color,
-      ...(next.name !== undefined
-        ? { name: next.name.trim() }
-        : name.trim()
-          ? { name: name.trim() }
-          : {}),
-    });
-    if (Exit.isFailure(result)) {
-      setSaveError(rpcErrorMessageFromCause(result.cause as Cause.Cause<unknown>));
-    }
+  const save = (next: { number?: string; name?: string; color?: Color }) => {
+    const run = async () => {
+      setSaveError(undefined);
+      const current = committedItem.current;
+      const edit = {
+        id: item.id,
+        number: ((next.number?.trim() ?? current.number) || current.number) as Item["number"],
+        color: next.color ?? current.color,
+        ...(next.name === undefined ? {} : { name: next.name.trim() }),
+      };
+      const result = await onEdit(edit);
+      if (Exit.isFailure(result)) {
+        committedItem.current = current;
+        setSaveError(rpcErrorMessageFromCause(result.cause as Cause.Cause<unknown>));
+      } else {
+        committedItem.current = { ...current, ...edit };
+      }
+      return result;
+    };
+    const result = pendingSave.current?.then(run, run) ?? run();
+    pendingSave.current = result;
     return result;
   };
 
