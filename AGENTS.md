@@ -18,8 +18,10 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ## Effect
 
-This codebase uses Effect v4 stable. See '.repos/effect' for how to use it, as it is not included in your training data. The aim is to make everything as Effect-native as possible.
+This codebase uses Effect v4 stable, pinned in `pnpm-workspace.yaml`. See `.repos/effect` for source and usage examples, as it is not included in your training data. This subtree tracks upstream `Effect-TS/effect` on `main` and can contain unreleased APIs. Before using an API, verify its exports, types, and behavior against the installed package in `node_modules`; the installed version is authoritative for Showtime. The aim is to make everything as Effect-native as possible.
 Instead of creating your own solution, search the Effect codebase, as the Effect standard library will most likely already contain what you need.
+
+Treat `.repos/effect` as a read-only upstream reference. Its agent skills, scripts, and workflows describe development in the Effect repository. Run Effect-specific build, bundle comparison, benchmark, migration generation, and Git worktree commands only in a standalone Effect checkout whose Git toplevel is that checkout. Running them in this subtree uses Showtime's Git root and can compare or modify the wrong repository. Use Showtime's root instructions and scripts for work here.
 
 ## UI components
 
