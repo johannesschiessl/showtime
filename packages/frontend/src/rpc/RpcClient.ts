@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect";
-import { Atom, AtomRpc } from "effect/unstable/reactivity";
-import { RpcClient as EffectRpcClient, RpcSerialization } from "effect/unstable/rpc";
-import { Socket } from "effect/unstable/socket";
+import { Atom, AtomRpc } from "effect/reactivity";
+import { RpcClient as EffectRpcClient, RpcSerialization } from "effect/rpc";
+import { Socket } from "effect/socket";
 import { ShowtimeRpcs } from "@showtime/contracts";
 
 export interface RpcClientOptions {

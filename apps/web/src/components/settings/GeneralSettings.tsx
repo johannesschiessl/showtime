@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronsUpDownIcon, Trash2Icon } from "lucide-react";
 import type { Color, ShowName } from "@showtime/contracts";

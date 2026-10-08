@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
-import { Atom, AtomRegistry } from "effect/unstable/reactivity";
-import { Socket } from "effect/unstable/socket";
+import { Atom, AtomRegistry } from "effect/reactivity";
+import { Socket } from "effect/socket";
 import { describe, expect, it } from "vite-plus/test";
 import { makeShowtimeFrontend } from "../index.js";
 

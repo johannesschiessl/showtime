@@ -1,7 +1,7 @@
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node";
 import { Context, DateTime, Effect, Layer, Path, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
-import { SqlClient } from "effect/unstable/sql";
+import { SqlClient } from "effect/sql";
 import { customAlphabet } from "nanoid";
 import { DatabaseSync } from "node:sqlite";
 import { hostname } from "node:os";
@@ -141,7 +141,7 @@ const resetMessage = (paths: ReadonlyArray<string>) =>
   `Unsupported prerelease Showtime state was found. This development cutover does not import old state. ` +
   `Move or remove the listed state and start Showtime again: ${paths.join(", ")}`;
 
-export class UnsupportedPrereleaseStateError extends Schema.TaggedErrorClass<UnsupportedPrereleaseStateError>()(
+export class UnsupportedPrereleaseStateError extends Schema.TaggedError<UnsupportedPrereleaseStateError>()(
   "UnsupportedPrereleaseStateError",
   {
     message: Schema.String,
@@ -150,7 +150,7 @@ export class UnsupportedPrereleaseStateError extends Schema.TaggedErrorClass<Uns
   },
 ) {}
 
-export class DatabaseInitializationError extends Schema.TaggedErrorClass<DatabaseInitializationError>()(
+export class DatabaseInitializationError extends Schema.TaggedError<DatabaseInitializationError>()(
   "DatabaseInitializationError",
   { message: Schema.String, stage: Schema.String, cause: Schema.optional(Schema.Defect()) },
 ) {}

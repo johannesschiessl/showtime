@@ -8,9 +8,9 @@ managePackageManagerVersions: false
 pmOnFail: ignore
 
 catalog:
-  "@effect/atom-react": 4.0.0-beta.103
+  "@effect/atom-react": 4.0.2
   "@base-ui/react": ^1.6.0
-  "@effect/platform-node": 4.0.0-beta.103
+  "@effect/platform-node": 4.0.2
   "@fontsource-variable/inter": ^5.2.8
   "@tailwindcss/vite": ^4.3.2
   "@tanstack/react-router": ^1.170.16
@@ -19,7 +19,7 @@ catalog:
   "@types/node": ^24.13.2
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
-  effect: 4.0.0-beta.103
+  effect: 4.0.2
   lucide-react: ^1.23.0
   nanoid: ^5.1.6
   react: 19.2.7
@@ -39,7 +39,7 @@ catalog:
   electron-builder: ^26.15.3
   "@homebridge/ciao": 1.3.10
   "@shadcn/react": ^0.2.1
-  "@effect/sql-sqlite-node": 4.0.0-beta.103
+  "@effect/sql-sqlite-node": 4.0.2
 overrides:
   vite: "catalog:"
 peerDependencyRules:
@@ -48,11 +48,11 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
 minimumReleaseAgeExclude:
-  - effect@4.0.0-beta.103
-  - "@effect/atom-react@4.0.0-beta.103"
-  - "@effect/platform-node@4.0.0-beta.103"
-  - "@effect/platform-node-shared@4.0.0-beta.103"
-  - "@effect/sql-sqlite-node@4.0.0-beta.103"
+  - effect@4.0.2
+  - "@effect/atom-react@4.0.2"
+  - "@effect/platform-node@4.0.2"
+  - "@effect/platform-node-shared@4.0.2"
+  - "@effect/sql-sqlite-node@4.0.2"
   - "@voidzero-dev/vite-plus-core@0.2.2"
   - "@voidzero-dev/vite-plus-darwin-arm64@0.2.2"
   - "@voidzero-dev/vite-plus-darwin-x64@0.2.2"

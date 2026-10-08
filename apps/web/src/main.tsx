@@ -9,7 +9,7 @@ import { capturePairingFragment, probeStoredConnection, readStoredConnection } f
 import { connectionState, type ConnectionStatus, useConnectionSnapshot } from "./connection-state";
 import { ConnectionOverlay } from "./components/connections/ConnectionOverlay";
 import { isDesktopHost } from "./platform";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { showsAtom } from "./client";
 import { useBrowserConnectionIdentity } from "./browser-connection-state";

@@ -1,5 +1,5 @@
 import { Clock, Context, Deferred, Effect, Layer, Ref, Schema, Semaphore } from "effect";
-import { SqlClient, SqlSchema } from "effect/unstable/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { nanoid } from "nanoid";
 import { randomBytes } from "node:crypto";
 import { ShowtimeConnectionScopes, type ShowtimeConnectionScope } from "@showtime/shared";
@@ -41,7 +41,7 @@ export interface PairingCredentials {
   readonly clientProfile: ProfileIdType;
 }
 
-export class ConnectionInputError extends Schema.TaggedErrorClass<ConnectionInputError>()(
+export class ConnectionInputError extends Schema.TaggedError<ConnectionInputError>()(
   "ConnectionInputError",
   { message: Schema.String },
 ) {}

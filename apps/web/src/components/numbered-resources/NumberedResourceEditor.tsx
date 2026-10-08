@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Exit, type Cause } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { AlertCircleIcon, CheckIcon, Trash2Icon } from "lucide-react";
 import { colors as colorOptions, type Color } from "@showtime/contracts";
 import { Badge } from "@/components/ui/badge";

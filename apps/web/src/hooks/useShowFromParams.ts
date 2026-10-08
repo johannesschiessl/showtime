@@ -1,6 +1,6 @@
 import { useParams } from "@tanstack/react-router";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
 import { showsAtom } from "@/client";
 

@@ -1,13 +1,8 @@
 import { NodeFileSystem, NodeHttpServer, NodePath } from "@effect/platform-node";
 import { Context, Effect, Layer, ManagedRuntime, Schema, Semaphore } from "effect";
-import { SqlClient } from "effect/unstable/sql";
-import {
-  HttpRouter,
-  HttpServerRequest,
-  HttpServerResponse,
-  HttpStaticServer,
-} from "effect/unstable/http";
-import { RpcSerialization, RpcServer } from "effect/unstable/rpc";
+import { SqlClient } from "effect/sql";
+import { HttpRouter, HttpServerRequest, HttpServerResponse, HttpStaticServer } from "effect/http";
+import { RpcSerialization, RpcServer } from "effect/rpc";
 import { createServer } from "node:http";
 import {
   showtimeLocalPort,
@@ -349,7 +344,7 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
       }),
     ).layer;
 
-    return Rpc.layer.pipe(
+    const rpcServer = Rpc.layer.pipe(
       Layer.provide(
         Layer.mergeAll(
           ShowService.layer,
@@ -361,16 +356,13 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
         ),
       ),
       Layer.provideMerge(RpcProtocol),
-      Layer.provide(
-        HttpRouter.serve(
-          Layer.mergeAll(RpcProtocol, staticFiles.pipe(Layer.provide(remoteHostingGate))),
-          {
-            disableListenLog: true,
-          },
-        ),
-      ),
-      Layer.provide(RpcSerialization.layerJson),
     );
+
+    // Build the RPC server and its routes together in serve's private memo map.
+    return HttpRouter.serve(
+      Layer.mergeAll(rpcServer, staticFiles.pipe(Layer.provide(remoteHostingGate))),
+      { disableListenLog: true },
+    ).pipe(Layer.provide(RpcSerialization.layerJson));
   })();
 
 const makeConnectionManagerLayer = (options: BackendOptions, desktopCapability: string) =>

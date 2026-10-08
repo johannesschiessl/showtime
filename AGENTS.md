@@ -18,7 +18,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ## Effect
 
-This codebase uses Effect v4 Beta. See '.repos/effect' for how to use it, as it is not included in your training data. The aim is to make everything as Effect-native as possible.
+This codebase uses Effect v4 stable. See '.repos/effect' for how to use it, as it is not included in your training data. The aim is to make everything as Effect-native as possible.
 Instead of creating your own solution, search the Effect codebase, as the Effect standard library will most likely already contain what you need.
 
 ## UI components

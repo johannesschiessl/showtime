@@ -1,4 +1,4 @@
-import type { Atom } from "effect/unstable/reactivity";
+import type { Atom } from "effect/reactivity";
 
 export interface StreamingRpcOptions {
   /** Signals that recreate a completed or failed streaming RPC subscription. */

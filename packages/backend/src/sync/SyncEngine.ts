@@ -1,5 +1,5 @@
 import { Context, Effect, Layer, Stream } from "effect";
-import { Reactivity } from "effect/unstable/reactivity";
+import { Reactivity } from "effect/reactivity";
 
 type SyncKeys = ReadonlyArray<unknown>;
 

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { AlertCircleIcon, FolderIcon } from "lucide-react";
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import {
   Empty,
   EmptyDescription,

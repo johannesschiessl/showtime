@@ -9,7 +9,7 @@ import {
   SubscriptionRef,
   type Fiber as FiberType,
 } from "effect";
-import { HttpServer } from "effect/unstable/http";
+import { HttpServer } from "effect/http";
 import {
   type ShowtimeHostName,
   ShowtimeHostnameLabel,

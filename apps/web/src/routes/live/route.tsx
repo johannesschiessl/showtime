@@ -6,7 +6,7 @@ import { useAtomValue } from "@effect/atom-react";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
 import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ShowId } from "@showtime/contracts";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import React from "react";
 import { LiveChatDrawer } from "@/components/live/LiveChatDrawer";
 import { useLivePresence } from "@/lib/useLivePresence";

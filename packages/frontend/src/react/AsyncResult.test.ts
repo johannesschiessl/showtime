@@ -1,5 +1,5 @@
 import { Option } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { describe, expect, it } from "vite-plus/test";
 import { asyncResultValueOrElse, isFailureWithoutValue } from "./AsyncResult.js";
 

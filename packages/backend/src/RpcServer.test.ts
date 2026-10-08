@@ -1,6 +1,6 @@
 import { NodeSocket } from "@effect/platform-node";
 import { Deferred, Effect, Layer, Stream } from "effect";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import { RpcClient, RpcSerialization } from "effect/rpc";
 import { createServer } from "node:net";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
