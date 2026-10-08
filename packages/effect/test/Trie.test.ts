@@ -9,8 +9,9 @@ import * as Trie from "effect/Trie"
 
 describe("Trie", () => {
   it("equality rejects tries with different numbers of entries after a hash collision", () => {
+    // Makes the "a" entry collide with the empty trie.
     const value = {
-      [Hash.symbol]: () => Hash.hash("a") * 53
+      [Hash.symbol]: () => -1520130700
     }
     const empty = Trie.empty<typeof value>()
     const nonEmpty = Trie.make(["a", value])
@@ -78,6 +79,17 @@ describe("Trie", () => {
     deepStrictEqual(Array.from(trie2), [["call", 0], ["me", 1]])
     deepStrictEqual(Array.from(trie3), [["call", 0], ["me", 1], ["mind", 2]])
     deepStrictEqual(Array.from(trie4), [["call", 0], ["me", 1], ["mid", 3], ["mind", 2]])
+  })
+
+  it("insert replaces a key without mutating or growing the original", () => {
+    const before = Trie.make(["a", 1])
+    const after = Trie.insert(before, "a", 2)
+
+    deepStrictEqual(
+      [Array.from(before), Trie.size(before), Array.from(after), Trie.size(after)],
+      [[["a", 1]], 1, [["a", 2]], 1],
+      "replacement must be immutable and preserve size"
+    )
   })
 
   it("fromIterable preserves an empty iterable", () => {
@@ -220,6 +232,12 @@ describe("Trie", () => {
     deepStrictEqual(Array.from(trie), [["call", 0], ["me", 1], ["mid", 3], ["mind", 2]])
     deepStrictEqual(Array.from(trie1), [["me", 1], ["mid", 3], ["mind", 2]])
     deepStrictEqual(Array.from(trie2), [["me", 1], ["mid", 3], ["mind", 2]])
+  })
+
+  it("remove preserves a valued prefix", () => {
+    const trie = Trie.make(["ab", 1], ["abc", 2]).pipe(Trie.remove("abc"))
+
+    deepStrictEqual(Array.from(trie), [["ab", 1]], "valued prefix should remain after removing its extension")
   })
 
   it("keys returns keys in sorted order", () => {

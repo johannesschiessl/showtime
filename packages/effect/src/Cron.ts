@@ -5,6 +5,7 @@
  * can create or parse schedules, compare them, test whether a date matches, and
  * find previous or next scheduled occurrences.
  *
+ * @stability stable
  * @since 2.0.0
  */
 import * as Arr from "./Array.ts"
@@ -12,8 +13,8 @@ import * as Data from "./Data.ts"
 import type * as DateTime from "./DateTime.ts"
 import * as Equal from "./Equal.ts"
 import * as Equ from "./Equivalence.ts"
-import { format } from "./Formatter.ts"
-import { constVoid, dual, pipe } from "./Function.ts"
+import { format as formatValue } from "./Formatter.ts"
+import { constFalse, constVoid, dual, pipe } from "./Function.ts"
 import * as Hash from "./Hash.ts"
 import { type Inspectable, NodeInspectSymbol } from "./Inspectable.ts"
 import * as dateTime from "./internal/dateTime.ts"
@@ -25,7 +26,7 @@ import * as Result from "./Result.ts"
 import * as String from "./String.ts"
 import type { Mutable } from "./Types.ts"
 
-const TypeId = "~effect/time/Cron"
+const TypeId = "~effect/Cron"
 
 /**
  * Represents a cron schedule with time constraints and timezone information.
@@ -65,6 +66,7 @@ const TypeId = "~effect/time/Cron"
  * @see {@link match} for testing a date against a schedule
  * @see {@link next} for finding the next scheduled occurrence
  *
+ * @stability stable
  * @category models
  * @since 2.0.0
  */
@@ -152,7 +154,7 @@ const CronProto = {
     return toPojo(this)
   },
   toString(this: Cron) {
-    return `Cron(${format(toPojo(this))})`
+    return `Cron(${formatValue(toPojo(this))})`
   },
   toJSON(this: Cron) {
     const out = toPojo(this)
@@ -201,6 +203,7 @@ const CronProto = {
  * @see {@link make} for constructing a `Cron` value directly
  * @see {@link parse} for constructing a `Cron` value from a string
  *
+ * @stability stable
  * @category guards
  * @since 2.0.0
  */
@@ -288,6 +291,7 @@ export const isCron = (u: unknown): u is Cron => hasProperty(u, TypeId)
  *
  * @see {@link parse} for building a schedule from a cron expression string
  *
+ * @stability stable
  * @category constructors
  * @since 2.0.0
  */
@@ -435,7 +439,7 @@ const lookup = {
   }
 }
 
-const CronParseErrorTypeId = "~effect/time/Cron/CronParseError"
+const CronParseErrorTypeId = "~effect/Cron/CronParseError"
 
 /**
  * Represents an error that occurs when parsing a cron expression fails.
@@ -465,6 +469,7 @@ const CronParseErrorTypeId = "~effect/time/Cron/CronParseError"
  * @see {@link parse} for the parser that returns this error in `Result.fail`
  * @see {@link isCronParseError} for narrowing unknown values to this error type
  *
+ * @stability stable
  * @category errors
  * @since 4.0.0
  */
@@ -501,6 +506,7 @@ export class CronParseError extends Data.TaggedError("CronParseError")<{
  * @see {@link CronParseError} for the parse error type
  * @see {@link parse} for producing `CronParseError` values on invalid input
  *
+ * @stability stable
  * @category guards
  * @since 4.0.0
  */
@@ -539,6 +545,7 @@ export const isCronParseError = (u: unknown): u is CronParseError => hasProperty
  * @see {@link parseUnsafe} for throwing on invalid cron expressions
  * @see {@link make} for constructing a schedule from explicit field constraints
  *
+ * @stability stable
  * @category constructors
  * @since 2.0.0
  */
@@ -607,10 +614,75 @@ export const parse = (cron: string, tz?: DateTime.TimeZone | string): Result.Res
  * Cron.match(cronWithTz, "2024-01-01T14:00:00Z") // => true
  * ```
  *
+ * @stability stable
  * @category constructors
  * @since 4.0.0
  */
 export const parseUnsafe = (cron: string, tz?: DateTime.TimeZone | string): Cron => Result.getOrThrow(parse(cron, tz))
+
+/**
+ * Formats a `Cron` instance as a cron expression.
+ *
+ * **Details**
+ *
+ * The default seconds field (`0`) is omitted unless `includeSeconds` is `true`.
+ * Other seconds configurations are always included.
+ *
+ * **Gotchas**
+ *
+ * Formatting drops the timezone information and the `and` restriction between
+ * days and weekdays. Parsing the result is therefore not guaranteed to produce
+ * an equivalent schedule.
+ *
+ * **Example** (Formatting a cron expression)
+ *
+ * ```ts import.meta.vitest
+ * import { Cron } from "effect"
+ *
+ * const cron = Cron.parseUnsafe("23 0-20/2 * * 0", "UTC")
+ *
+ * Cron.format(cron) // => "23 0-20/2 * * 0"
+ * Cron.format(cron, { includeSeconds: true }) // => "0 23 0-20/2 * * 0"
+ * ```
+ *
+ * @stability stable
+ * @category getters
+ * @since 4.0.0
+ */
+export const format = (cron: Cron, options?: {
+  readonly includeSeconds?: boolean | undefined
+}): string => {
+  const segments = [cron.seconds, cron.minutes, cron.hours, cron.days, cron.months, cron.weekdays]
+    .map(formatSegment)
+  return (
+    options?.includeSeconds !== true && cron.seconds.size === 1 && cron.seconds.has(0) ? segments.slice(1) : segments
+  ).join(" ")
+}
+
+const formatSegment = (values: ReadonlySet<number>): string => {
+  if (values.size === 0) {
+    return "*"
+  }
+  const array = Array.from(values)
+  const segments: Array<string> = []
+  let index = 0
+  while (index < array.length) {
+    const start = array[index]!
+    const step = array[index + 1]! - start
+    if (index + 2 < array.length && array[index + 2]! - array[index + 1]! === step) {
+      let end = index + 2
+      while (end + 1 < array.length && array[end + 1]! - array[end]! === step) {
+        end++
+      }
+      segments.push(`${start}-${array[end]}${step === 1 ? "" : `/${step}`}`)
+      index = end + 1
+    } else {
+      segments.push(`${start}`)
+      index++
+    }
+  }
+  return segments.join(",")
+}
 
 /**
  * Returns `true` when a date/time matches a `Cron` schedule.
@@ -645,6 +717,7 @@ export const parseUnsafe = (cron: string, tz?: DateTime.TimeZone | string): Cron
  * @see {@link next} for finding the next matching date/time
  * @see {@link prev} for finding the previous matching date/time
  *
+ * @stability stable
  * @category predicates
  * @since 2.0.0
  */
@@ -720,6 +793,7 @@ const daysInMonth = (date: Date): number =>
  * @see {@link prev} for finding the previous scheduled occurrence
  * @see {@link sequence} for iterating future scheduled occurrences
  *
+ * @stability stable
  * @category getters
  * @since 2.0.0
  */
@@ -746,6 +820,7 @@ export const next = (cron: Cron, now?: DateTime.DateTime.Input): Date => {
  *
  * @see {@link next} for finding the next scheduled occurrence
  *
+ * @stability stable
  * @category getters
  * @since 3.20.0
  */
@@ -781,6 +856,14 @@ const stepCron = (cron: Cron, now: DateTime.DateTime.Input | undefined, directio
       current.setTime(reverse ? adjusted.getTime() : current.getTime() + drift)
     }
   }
+
+  // Repeated wall times resolve to their first occurrence, so when the search
+  // starts in the second occurrence, matches inside that fold are in the past.
+  const isBeforeStart = reverse || utc ? constFalse : (current: Date) =>
+    dateTime.makeZonedUnsafe(current, {
+      timeZone: zoned.zone,
+      adjustForTimeZone: true
+    }).epochMilliseconds <= zoned.epochMilliseconds
 
   const result = dateTime.mutate(zoned, (current) => {
     current.setUTCSeconds(current.getUTCSeconds() + tick, 0)
@@ -925,6 +1008,12 @@ const stepCron = (cron: Cron, now: DateTime.DateTime.Input | undefined, directio
         }
       }
 
+      if (isBeforeStart(current)) {
+        current.setUTCSeconds(current.getUTCSeconds() + 1)
+        i = -1 // skipped fold candidates do not count against the search budget
+        continue
+      }
+
       return
     }
 
@@ -970,6 +1059,7 @@ const stepCron = (cron: Cron, now: DateTime.DateTime.Input | undefined, directio
  *
  * @see {@link next} for computing one next occurrence
  *
+ * @stability stable
  * @category sequencing
  * @since 2.0.0
  */
@@ -1019,6 +1109,7 @@ export const sequence = function*(cron: Cron, now?: DateTime.DateTime.Input): It
  *
  * @see {@link equals} for directly comparing two `Cron` values
  *
+ * @stability stable
  * @category instances
  * @since 2.0.0
  */
@@ -1078,6 +1169,7 @@ const restrictionsEquals = (self: ReadonlySet<number>, that: ReadonlySet<number>
  *
  * @see {@link Equivalence} for the reusable equivalence instance
  *
+ * @stability stable
  * @category predicates
  * @since 2.0.0
  */

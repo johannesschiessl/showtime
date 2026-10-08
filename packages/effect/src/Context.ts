@@ -8,6 +8,7 @@
  * for creating keys, building contexts, adding and reading services, merging
  * contexts, and selecting or removing services.
  *
+ * @stability stable
  * @since 4.0.0
  */
 import type { Effect, EffectIterator } from "./Effect.ts"
@@ -17,7 +18,6 @@ import { dual, type LazyArg } from "./Function.ts"
 import * as Hash from "./Hash.ts"
 import type { Inspectable } from "./Inspectable.ts"
 import { exitSucceed, PipeInspectableProto, withFiber } from "./internal/core.ts"
-import { getStackTraceLimit, setStackTraceLimit } from "./internal/stackTraceLimit.ts"
 import * as Option from "./Option.ts"
 import type { Pipeable } from "./Pipeable.ts"
 import { hasProperty } from "./Predicate.ts"
@@ -27,6 +27,7 @@ import type * as Types from "./Types.ts"
  * String literal type used as the runtime type identifier for `Context`
  * service keys.
  *
+ * @stability stable
  * @category type IDs
  * @since 4.0.0
  */
@@ -36,6 +37,7 @@ export type ServiceTypeId = "~effect/Context/Service"
  * Runtime type identifier attached to `Context` service keys and used by
  * `isKey` to recognize them.
  *
+ * @stability stable
  * @category type IDs
  * @since 4.0.0
  */
@@ -59,6 +61,7 @@ export const ServiceTypeId: ServiceTypeId = "~effect/Context/Service"
  * @see {@link Service} for creating required service keys
  * @see {@link Reference} for creating service keys with default values
  *
+ * @stability stable
  * @category models
  * @since 4.0.0
  */
@@ -67,7 +70,6 @@ export interface Key<out Identifier, out Shape> extends Effect<Shape, never, Ide
   readonly Service: Shape
   readonly Identifier: Identifier
   readonly key: string
-  readonly stack?: string | undefined
 }
 
 /**
@@ -94,6 +96,7 @@ export interface Key<out Identifier, out Shape> extends Effect<Shape, never, Ide
  * Context.get(context, Database).query("SELECT 1") // => "Result: SELECT 1"
  * ```
  *
+ * @stability stable
  * @category services
  * @since 4.0.0
  */
@@ -119,6 +122,7 @@ export interface Service<in out Identifier, in out Shape> extends Key<Identifier
  *
  * @see {@link Service} for creating function-style keys or class-style service keys
  *
+ * @stability stable
  * @category services
  * @since 4.0.0
  */
@@ -133,6 +137,7 @@ export interface ServiceClass<in out Self, in out Identifier extends string, in 
  * Namespace containing helper types for class-style `Context.Service`
  * declarations.
  *
+ * @stability stable
  * @since 4.0.0
  */
 export declare namespace ServiceClass {
@@ -197,6 +202,7 @@ export declare namespace ServiceClass {
  *
  * @see {@link Reference} for service keys with default values
  *
+ * @stability stable
  * @category services
  * @since 4.0.0
  */
@@ -244,19 +250,9 @@ export const Service: {
     >
     & { readonly make: Make }
 } = function() {
-  const prevLimit = getStackTraceLimit()
-  setStackTraceLimit(2)
-  const err = new Error()
-  setStackTraceLimit(prevLimit)
   function KeyClass() {}
   const self = KeyClass as any as Types.Mutable<Reference<any>>
   Object.setPrototypeOf(self, ServiceProto)
-  // @effect-diagnostics-next-line floatingEffect:off
-  Object.defineProperty(self, "stack", {
-    get() {
-      return err.stack
-    }
-  })
   const init = (key: string, options?: {
     readonly defaultValue?: any
     readonly make?: any
@@ -289,8 +285,7 @@ const ServiceProto: any = {
   toJSON<I, A>(this: Service<I, A>) {
     return {
       _id: "Service",
-      key: this.key,
-      stack: this.stack
+      key: this.key
     }
   },
   of<Service>(this: void, self: Service): Service {
@@ -342,6 +337,7 @@ const ReferenceTypeId = "~effect/Context/Reference" as const
  * messages // => ["default logger"]
  * ```
  *
+ * @stability stable
  * @category services
  * @since 3.11.0
  */
@@ -373,6 +369,7 @@ export interface Reference<in out Shape> extends Service<never, Shape> {
  * Database.key // => "Database"
  * ```
  *
+ * @stability stable
  * @since 2.0.0
  */
 export declare namespace Service {
@@ -474,6 +471,7 @@ const TypeId = "~effect/Context" as const
  * Context.get(context, Database).query("SELECT 1") // => "Result: SELECT 1"
  * ```
  *
+ * @stability stable
  * @category models
  * @since 2.0.0
  */
@@ -500,6 +498,8 @@ interface Overlay {
 }
 
 const MaxDepth = 8
+// Keep small bases cheap to read; larger bases are worth copying only after
+// enough fall-throughs to amortize the copy.
 const FlattenAfterBaseHits = 8
 
 const makeImpl = <Services>(
@@ -551,7 +551,7 @@ const lookup = (self: Context<any>, key: string): unknown => {
   // base on every fiber cache refresh, which would flatten every short-lived
   // request context and reintroduce the O(services) per-request cost
   if (value === undefined && !impl.base.has(key)) return notFound
-  if (impl.overlay && ++impl.baseHits >= FlattenAfterBaseHits) {
+  if (impl.overlay && ++impl.baseHits >= impl.base.size && impl.baseHits >= FlattenAfterBaseHits) {
     impl.base = flatten(impl)
     impl.overlay = undefined
     impl.depth = 0
@@ -587,6 +587,7 @@ const lookup = (self: Context<any>, key: string): unknown => {
  * context.mapUnsafe.size // => 1
  * ```
  *
+ * @stability stable
  * @category constructors
  * @since 4.0.0
  */
@@ -597,12 +598,12 @@ const Proto: Omit<
   ContextImpl<never>,
   "cacheRoot" | "base" | "overlay" | "depth" | "_flat" | "baseHits"
 > = {
+  get mapUnsafe() {
+    return flatten(this as any as ContextImpl<any>)
+  },
   ...PipeInspectableProto,
   [TypeId]: {
     _Services: (_: never) => _
-  },
-  get mapUnsafe() {
-    return flatten(this as any as ContextImpl<any>)
   },
   toJSON(this: Context<never>) {
     return {
@@ -659,6 +660,7 @@ export const hasSameCache = <Services, Services2>(
  * @see {@link isKey} for checking service keys
  * @see {@link isReference} for checking references with defaults
  *
+ * @stability stable
  * @category guards
  * @since 2.0.0
  */
@@ -674,6 +676,7 @@ export const isContext = (u: unknown): u is Context<never> => hasProperty(u, Typ
  * Context.isKey(Context.Service("Service")) // => true
  * ```
  *
+ * @stability stable
  * @category guards
  * @since 4.0.0
  */
@@ -695,6 +698,7 @@ export const isKey = (u: unknown): u is Key<any, any> => hasProperty(u, ServiceT
  * Context.isReference(Context.Service("Key")) // => false
  * ```
  *
+ * @stability stable
  * @category guards
  * @since 3.11.0
  */
@@ -710,6 +714,7 @@ export const isReference = <I, S>(u: Key<I, S>): u is Reference<S> => !!(u as Re
  * Context.empty().mapUnsafe.size // => 0
  * ```
  *
+ * @stability stable
  * @category constructors
  * @since 2.0.0
  */
@@ -731,6 +736,7 @@ const emptyContext = makeUnsafe(new Map())
  * Context.get(context, Port).PORT // => 8080
  * ```
  *
+ * @stability stable
  * @category constructors
  * @since 2.0.0
  */
@@ -772,6 +778,7 @@ export const make = <I, S>(
  *
  * @see {@link addOrOmit} for adding or removing a service from an `Option`
  *
+ * @stability stable
  * @category combining
  * @since 2.0.0
  */
@@ -789,24 +796,37 @@ export const add: {
   self: Context<Services>,
   key: Key<I, S>,
   service: Types.NoInfer<S>
+): Context<Services | I> => addUnsafe(self, key.key, service))
+
+/**
+ * Adds a service by key to a given `Context` using a string key.
+ *
+ * @stability stable
+ * @category combining
+ * @since 4.0.0
+ */
+export const addUnsafe = <Services, I, S>(
+  self: Context<Services>,
+  key: string,
+  service: Types.NoInfer<S>
 ): Context<Services | I> => {
   const impl = self as ContextImpl<Services>
-  const cacheRoot = cacheKeys.has(key.key) ? undefined : impl.cacheRoot
+  const cacheRoot = cacheKeys.has(key) ? undefined : impl.cacheRoot
   if (impl.depth >= MaxDepth) {
     // Rebase the overlay chain into a flat map, keeping the cacheRoot so a
     // rebase on an ordinary key does not invalidate fiber caches
     const map = new Map(impl.mapUnsafe)
-    map.set(key.key, service)
+    map.set(key, service)
     return makeImpl(cacheRoot, map, undefined, 0)
   }
 
   return makeImpl(
     cacheRoot,
     impl.base,
-    { key: key.key, value: service, parent: impl.overlay },
+    { key, value: service, parent: impl.overlay },
     impl.depth + 1
   )
-})
+}
 
 /**
  * Adds or removes a service depending on an `Option`.
@@ -840,6 +860,7 @@ export const add: {
  *
  * @see {@link add} for always storing a service value
  *
+ * @stability stable
  * @category combining
  * @since 4.0.0
  */
@@ -906,6 +927,7 @@ export const addOrOmit: {
  *
  * @see {@link getOption} for returning `Option.none` when a non-reference key is missing
  *
+ * @stability stable
  * @category getters
  * @since 3.7.0
  */
@@ -934,6 +956,7 @@ export const getOrElse: {
  *
  * @see {@link getOption} for a reference-aware optional lookup
  *
+ * @stability stable
  * @category getters
  * @since 4.0.0
  */
@@ -983,6 +1006,7 @@ export const getOrUndefinedUnsafe = <A, Services = never>(self: Context<Services
  * @see {@link get} for type-checked service access
  * @see {@link getOption} for optional service access
  *
+ * @stability stable
  * @category unsafe
  * @since 4.0.0
  */
@@ -1028,10 +1052,12 @@ export const getUnsafe: {
  * @see {@link getOption} for optional service access
  * @see {@link getOrElse} for fallback values
  *
+ * @stability stable
  * @category getters
  * @since 2.0.0
  */
 export const get: {
+  <I, S>(service: Key<I, S>): (self: Context<I>) => S
   <Services, I extends Services, S>(service: Key<I, S>): (self: Context<Services>) => S
   <Services, I extends Services, S>(self: Context<Services>, service: Key<I, S>): S
 } = getUnsafe
@@ -1049,15 +1075,6 @@ const serviceNotFoundError = (service: Key<any, any>) => {
   const error = new Error(
     `Service not found${service.key ? `: ${String(service.key)}` : ""}`
   )
-  if (service.stack) {
-    const lines = service.stack.split("\n")
-    if (lines.length > 2) {
-      const afterAt = lines[2].match(/at (.*)/)
-      if (afterAt) {
-        error.message = error.message + ` (defined at ${afterAt[1]})`
-      }
-    }
-  }
   if (error.stack) {
     const lines = error.stack.split("\n")
     lines.splice(1, 3)
@@ -1096,6 +1113,7 @@ const serviceNotFoundError = (service: Key<any, any>) => {
  *
  * @see {@link getOrElse} for returning a fallback value directly
  *
+ * @stability stable
  * @category getters
  * @since 2.0.0
  */
@@ -1139,6 +1157,7 @@ export const getOption: {
  *
  * @see {@link mergeAll} for merging more than two contexts at once
  *
+ * @stability stable
  * @category combining
  * @since 2.0.0
  */
@@ -1187,6 +1206,7 @@ export const merge: {
  *
  * @see {@link merge} for merging two contexts
  *
+ * @stability stable
  * @category combining
  * @since 3.12.0
  */
@@ -1230,6 +1250,7 @@ export const mergeAll = <T extends Array<unknown>>(
  *
  * @see {@link omit} for removing selected services
  *
+ * @stability stable
  * @category filtering
  * @since 2.0.0
  */
@@ -1272,6 +1293,7 @@ export const pick = <S extends ReadonlyArray<Key<any, any>>>(
  *
  * @see {@link pick} for keeping selected services
  *
+ * @stability stable
  * @category filtering
  * @since 2.0.0
  */
@@ -1328,6 +1350,7 @@ export const omit = <S extends ReadonlyArray<Key<any, any>>>(
  *
  * @see {@link Service} for required services without default values
  *
+ * @stability stable
  * @category services
  * @since 3.11.0
  */
