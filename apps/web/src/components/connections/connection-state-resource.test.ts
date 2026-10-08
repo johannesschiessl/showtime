@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { AsyncResult, AtomRegistry } from "effect/unstable/reactivity";
+import { AsyncResult, AtomRegistry } from "effect/reactivity";
 import type { ShowtimeConnectionsState, ShowtimeHostName } from "@showtime/shared";
 import { describe, expect, it, vi } from "vite-plus/test";
 import type { ConnectionManagementClient } from "./connection-management";

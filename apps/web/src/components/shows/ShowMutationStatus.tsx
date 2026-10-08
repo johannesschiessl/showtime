@@ -1,6 +1,6 @@
 import * as React from "react";
 import { AlertCircleIcon, CheckIcon, XIcon } from "lucide-react";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";

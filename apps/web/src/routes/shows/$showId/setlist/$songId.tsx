@@ -1,6 +1,6 @@
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Exit, Option } from "effect";
 import { AlertCircleIcon, EllipsisIcon, MusicIcon, Trash2Icon } from "lucide-react";
 import {

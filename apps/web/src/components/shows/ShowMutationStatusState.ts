@@ -1,4 +1,4 @@
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 
 type ShowMutationResult = AsyncResult.AsyncResult<unknown, unknown>;
 type ShowMutationFailure = Extract<ShowMutationResult, { readonly _tag: "Failure" }>;

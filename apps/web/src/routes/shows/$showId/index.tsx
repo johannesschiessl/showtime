@@ -1,7 +1,7 @@
 import * as React from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AlertCircleIcon, ArrowLeftIcon, FolderXIcon, PencilIcon, Trash2Icon } from "lucide-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Button } from "@/components/ui/button";
 import {
   Empty,

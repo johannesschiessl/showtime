@@ -1,5 +1,5 @@
 import { Effect, Option } from "effect";
-import { AsyncResult, Atom } from "effect/unstable/reactivity";
+import { AsyncResult, Atom } from "effect/reactivity";
 import type { ShowtimeConnectionsState } from "@showtime/shared";
 import type { ConnectionManagementClient } from "./connection-management";
 

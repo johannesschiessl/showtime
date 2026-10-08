@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import {
   resolveChatPresetTemplate,
   type ChatMessagePart,

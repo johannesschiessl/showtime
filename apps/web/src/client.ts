@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom } from "effect/reactivity";
 import { makeShowtimeFrontend } from "@showtime/frontend";
 import { resolveRpcWebSocketUrl } from "./platform";
 import {

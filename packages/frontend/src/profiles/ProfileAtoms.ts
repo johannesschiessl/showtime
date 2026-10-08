@@ -1,5 +1,5 @@
 import { DateTime } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import {
   makeTemporaryId,
   profileIdPrefix,

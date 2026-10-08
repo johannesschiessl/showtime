@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { Rpc, RpcGroup as EffectRpcGroup } from "effect/unstable/rpc";
+import { Rpc, RpcGroup as EffectRpcGroup } from "effect/rpc";
 import { Microphone, MicrophoneId, MicrophoneNumber } from "./microphone.js";
 import { Mix, MixId, MixNumber } from "./mix.js";
 import {
@@ -32,7 +32,7 @@ import {
   ChatSnapshot,
 } from "./chat.js";
 
-export class RpcError extends Schema.TaggedErrorClass<RpcError>()("RpcError", {
+export class RpcError extends Schema.TaggedError<RpcError>()("RpcError", {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
 }) {}

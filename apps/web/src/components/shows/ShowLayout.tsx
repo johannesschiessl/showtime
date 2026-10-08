@@ -30,7 +30,7 @@ import { TitleBar } from "../TitleBar";
 import { showColorClassNames } from "./show-color";
 import { Badge } from "../ui/badge";
 import { useShowFromParams } from "@/hooks/useShowFromParams";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { Option } from "effect";
 import type { ShowId, SongId } from "@showtime/contracts";
 import { useAtomValue } from "@effect/atom-react";

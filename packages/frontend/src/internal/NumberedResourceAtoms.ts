@@ -1,5 +1,5 @@
 import { DateTime } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import type { Color, ShowId } from "@showtime/contracts";
 import { applyOptimisticNamedItemEdit } from "./optimistic.js";
 

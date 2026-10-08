@@ -2,7 +2,7 @@ import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircleIcon, ListMusicIcon } from "lucide-react";
 import type { ShowId } from "@showtime/contracts";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { LiveSong } from "@/components/live/LiveSong";
 import { LiveSongNavigation } from "@/components/live/LiveSongNavigation";
 import { Button } from "@/components/ui/button";

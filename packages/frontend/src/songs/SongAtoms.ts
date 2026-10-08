@@ -1,5 +1,5 @@
 import { DateTime, Option } from "effect";
-import { Atom, AsyncResult } from "effect/unstable/reactivity";
+import { Atom, AsyncResult } from "effect/reactivity";
 import { insertSongAfter, type ShowId, type Song } from "@showtime/contracts";
 import type { ShowtimeRpcClient } from "../rpc/RpcClient.js";
 import { latestSnapshot } from "../rpc/LatestSnapshot.js";

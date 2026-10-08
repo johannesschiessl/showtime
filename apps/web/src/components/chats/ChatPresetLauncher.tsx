@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import type { ChatChannelId, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
 import { ChatPresetDialog } from "@/components/chats/ChatPresetDialog";

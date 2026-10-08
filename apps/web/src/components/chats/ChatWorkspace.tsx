@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
 import { DateTime, Exit } from "effect";
-import { AsyncResult } from "effect/unstable/reactivity";
+import { AsyncResult } from "effect/reactivity";
 import { MessageScroller, useMessageScrollerScrollable } from "@shadcn/react/message-scroller";
 import {
   chatsSyncKey,
