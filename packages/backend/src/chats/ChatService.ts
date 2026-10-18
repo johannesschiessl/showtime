@@ -314,6 +314,7 @@ const make = Effect.gen(function* () {
       });
       return { showId, profileId, channels, presets } satisfies ChatSnapshot;
     }).pipe(
+      sql.withTransaction,
       Effect.mapError((cause) =>
         cause instanceof RpcError ? cause : rpcError("Could not load chat.", cause),
       ),
