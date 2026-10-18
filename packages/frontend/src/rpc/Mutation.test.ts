@@ -24,11 +24,71 @@ describe("mutation execution", () => {
       const result = await Effect.runPromise(
         Effect.promise(() => pending).pipe(Effect.timeout("1 second")),
       );
-      expect(Exit.isFailure(result)).toBe(true);
+      expect(Exit.hasInterrupts(result)).toBe(true);
     } finally {
       registry.dispose();
     }
   });
+
+  it.each([
+    { fails: false, replace: false },
+    { fails: true, replace: false },
+    { fails: false, replace: true },
+    { fails: true, replace: true },
+  ])(
+    "keeps reset durable after a pending call settles ($fails, $replace)",
+    async ({ fails, replace }) => {
+      const started = Deferred.makeUnsafe<void>();
+      const releaseFirst = Deferred.makeUnsafe<void>();
+      const releaseSecond = Deferred.makeUnsafe<void>();
+      const mutation = Atom.fn((id: number) =>
+        Effect.gen(function* () {
+          if (id === 1) yield* Deferred.succeed(started, undefined);
+          yield* Deferred.await(id === 1 ? releaseFirst : releaseSecond);
+          if (id === 1 && fails) return yield* Effect.fail("first failed");
+          return id;
+        }),
+      );
+      const optimistic = Atom.make(0).pipe(
+        Atom.optimistic,
+        optimisticMutation({ reducer: (current, input: number) => current + input, fn: mutation }),
+      );
+      const registry = AtomRegistry.make();
+      const unmount = registry.mount(optimistic);
+      const first = executeMutation(registry, optimistic, 1);
+      let second: ReturnType<typeof executeMutation> | undefined;
+      try {
+        await Effect.runPromise(Deferred.await(started));
+        registry.set(optimistic, Atom.Reset);
+        expect(registry.get(optimistic)).toEqual(AsyncResult.initial());
+        if (replace) second = executeMutation(registry, optimistic, 2);
+
+        await Effect.runPromise(Deferred.succeed(releaseFirst, undefined));
+        const firstResult = await first;
+        if (fails) {
+          expect(await Effect.runPromise(Effect.flip(firstResult))).toBe("first failed");
+        } else {
+          expect(firstResult).toEqual(Exit.succeed(1));
+        }
+        const result = registry.get(optimistic);
+        expect(AsyncResult.isInitial(result)).toBe(true);
+        expect(result.waiting).toBe(replace);
+
+        if (second) {
+          await Effect.runPromise(Deferred.succeed(releaseSecond, undefined));
+          expect(await second).toEqual(Exit.succeed(2));
+          expect(AsyncResult.getOrThrow(registry.get(optimistic))).toBe(2);
+          expect(registry.get(optimistic).waiting).toBe(false);
+        }
+      } finally {
+        await Effect.runPromise(Deferred.succeed(releaseFirst, undefined));
+        await Effect.runPromise(Deferred.succeed(releaseSecond, undefined));
+        await Promise.all([first, second]);
+        unmount();
+        registry.dispose();
+      }
+    },
+  );
 
   it.each([1, 2])(
     "shows queued optimism and preserves results when call %i fails",

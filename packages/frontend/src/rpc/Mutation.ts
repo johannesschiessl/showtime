@@ -18,10 +18,17 @@ export const optimisticMutation =
   }) =>
   (self: Atom.Writable<A, Atom.Atom<AsyncResult.AsyncResult<W, unknown>>>) => {
     type Call = { readonly input: Input; readonly completion: Deferred.Deferred<XA, XE> };
-    const latestResult = Atom.make<AsyncResult.AsyncResult<XA, XE>>(AsyncResult.initial());
+    const resultState = Atom.make<{
+      readonly generation: symbol;
+      readonly result: AsyncResult.AsyncResult<XA, XE>;
+    }>({
+      generation: Symbol(),
+      result: AsyncResult.initial<XA, XE>(),
+    });
     // Each call owns its transition and completion. Only the underlying RPC waits for a lock.
     const calls = Atom.fn(
       ({ input, completion }: Call, get) => {
+        const { generation } = get(resultState);
         let value = options.reducer(get(self), input);
         if (AsyncResult.isAsyncResult(value)) {
           value = AsyncResult.waiting(value, { touch: true });
@@ -38,7 +45,9 @@ export const optimisticMutation =
                   transition,
                   AsyncResult.map(AsyncResult.fromExit(exit), () => value),
                 );
-                get.registry.set(latestResult, AsyncResult.fromExit(exit));
+                if (get.registry.get(resultState).generation === generation) {
+                  get.registry.set(resultState, { generation, result: AsyncResult.fromExit(exit) });
+                }
               }
             }).pipe(Effect.ensuring(Deferred.done(completion, exit))),
           ),
@@ -50,13 +59,13 @@ export const optimisticMutation =
     const atom: Atom.AtomResultFn<Input, XA, XE> = Atom.writable(
       (get) => {
         const state = get(calls);
-        const result = get(latestResult);
+        const { result } = get(resultState);
         if (AsyncResult.isFailure(state)) return AsyncResult.failure<XA, XE>(state.cause);
         return state.waiting ? AsyncResult.waiting(result) : result;
       },
       (ctx, input) => {
         if (input === Atom.Reset) {
-          ctx.set(latestResult, AsyncResult.initial());
+          ctx.set(resultState, { generation: Symbol(), result: AsyncResult.initial() });
           ctx.set(calls, Atom.Reset);
         } else if (input === Atom.Interrupt) ctx.set(calls, Atom.Interrupt);
         else ctx.set(calls, { input, completion: Deferred.makeUnsafe<XA, XE>() });
