@@ -9,7 +9,12 @@ import { defineConfig, lazyPlugins, loadEnv } from "vite-plus";
 export const contentSecurityPolicy = (html: string, configuredRpcUrl?: string) => {
   const connectSources = ["'self'", `ws://localhost:${showtimeLocalPort}/rpc/desktop/`];
   if (configuredRpcUrl) {
-    const url = new URL(configuredRpcUrl);
+    let url: URL;
+    try {
+      url = new URL(configuredRpcUrl);
+    } catch (cause) {
+      throw new Error("VITE_SHOWTIME_RPC_WEBSOCKET_URL must be a valid URL.", { cause });
+    }
     if (url.protocol !== "ws:" && url.protocol !== "wss:") {
       throw new Error("VITE_SHOWTIME_RPC_WEBSOCKET_URL must use ws: or wss:.");
     }

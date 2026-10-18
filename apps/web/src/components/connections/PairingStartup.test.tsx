@@ -51,6 +51,20 @@ describe("PairingStartup", () => {
     expect(container.textContent).toBe("Show list");
   });
 
+  it("shows the returned error when pairing fails", async () => {
+    const message = "This connection link has expired. Ask for a new link.";
+    await React.act(async () => {
+      root.render(
+        <PairingStartup request={Promise.resolve({ status: "failed", message })}>
+          <p>Show list</p>
+        </PairingStartup>,
+      );
+    });
+    expect(container.textContent).toContain("Could not connect to Showtime");
+    expect(container.textContent).toContain(message);
+    expect(container.textContent).not.toContain("Show list");
+  });
+
   it("shows a recoverable failure when pairing unexpectedly rejects", async () => {
     let fail!: (error: Error) => void;
     const request = new Promise<PairingResult>((_resolve, reject) => {

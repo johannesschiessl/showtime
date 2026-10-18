@@ -23,6 +23,12 @@ describe("renderer content security policy", () => {
     );
   });
 
+  it("names the environment variable when the configured RPC URL is malformed", () => {
+    expect(() => contentSecurityPolicy("", "not a URL")).toThrow(
+      "VITE_SHOWTIME_RPC_WEBSOCKET_URL must be a valid URL.",
+    );
+  });
+
   it("explains how to configure IPv6 servers without an unsupported CSP source", () => {
     expect(() => contentSecurityPolicy("", "ws://[::1]:8585/rpc")).toThrow(
       "must use a hostname instead of an IPv6 literal",

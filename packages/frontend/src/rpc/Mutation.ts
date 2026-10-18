@@ -1,7 +1,11 @@
-import { Effect, Semaphore } from "effect";
-import { Atom, AtomRegistry, type AsyncResult } from "effect/reactivity";
+import { Deferred, Effect, Semaphore } from "effect";
+import { Atom, AtomRegistry, AsyncResult } from "effect/reactivity";
 
-const mutationOperations = new WeakMap<object, object>();
+interface MutationExecutor<A, E, Input> {
+  readonly execute: (registry: AtomRegistry.AtomRegistry, input: Input) => Effect.Effect<A, E>;
+}
+
+const mutationExecutors = new WeakMap<object, object>();
 const executionLocks = new WeakMap<
   AtomRegistry.AtomRegistry,
   WeakMap<object, Semaphore.Semaphore>
@@ -13,40 +17,107 @@ export const optimisticMutation =
     readonly fn: Atom.AtomResultFn<Input, XA, XE>;
   }) =>
   (self: Atom.Writable<A, Atom.Atom<AsyncResult.AsyncResult<W, unknown>>>) => {
-    const atom = Atom.optimisticFn(self, options);
-    mutationOperations.set(atom, mutationOperations.get(options.fn) ?? options.fn);
+    type Call = { readonly input: Input; readonly completion: Deferred.Deferred<XA, XE> };
+    const latestResult = Atom.make<AsyncResult.AsyncResult<XA, XE>>(AsyncResult.initial());
+    // Each call owns its transition and completion. Only the underlying RPC waits for a lock.
+    const calls = Atom.fn(
+      ({ input, completion }: Call, get) => {
+        let value = options.reducer(get(self), input);
+        if (AsyncResult.isAsyncResult(value)) {
+          value = AsyncResult.waiting(value, { touch: true });
+        }
+        const transition = Atom.make<AsyncResult.AsyncResult<W, unknown>>(
+          AsyncResult.success(value, { waiting: true }),
+        );
+        get.set(self, transition);
+        return runMutation(get.registry, options.fn, input).pipe(
+          Effect.onExit((exit) =>
+            Effect.sync(() => {
+              if (get.registry.getNodes().has(transition)) {
+                get.registry.set(
+                  transition,
+                  AsyncResult.map(AsyncResult.fromExit(exit), () => value),
+                );
+                get.registry.set(latestResult, AsyncResult.fromExit(exit));
+              }
+            }).pipe(Effect.ensuring(Deferred.done(completion, exit))),
+          ),
+          Effect.exit,
+        );
+      },
+      { concurrent: true },
+    );
+    const atom: Atom.AtomResultFn<Input, XA, XE> = Atom.writable(
+      (get) => {
+        const state = get(calls);
+        const result = get(latestResult);
+        if (AsyncResult.isFailure(state)) return AsyncResult.failure<XA, XE>(state.cause);
+        return state.waiting ? AsyncResult.waiting(result) : result;
+      },
+      (ctx, input) => {
+        if (input === Atom.Reset) {
+          ctx.set(latestResult, AsyncResult.initial());
+          ctx.set(calls, Atom.Reset);
+        } else if (input === Atom.Interrupt) ctx.set(calls, Atom.Interrupt);
+        else ctx.set(calls, { input, completion: Deferred.makeUnsafe<XA, XE>() });
+      },
+    );
+    const executor: MutationExecutor<XA, XE, Input | Atom.Reset | Atom.Interrupt> = {
+      execute: Effect.fn(function* (registry, input) {
+        if (input === Atom.Reset || input === Atom.Interrupt) {
+          registry.set(atom, input);
+          return yield* AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true });
+        }
+        const completion = Deferred.makeUnsafe<XA, XE>();
+        registry.set(calls, { input, completion });
+        return yield* Deferred.await(completion);
+      }),
+    };
+    mutationExecutors.set(atom, executor);
     return atom;
   };
 
-export const executeMutation = <A, E, W>(
+const runMutation = <A, E, W>(
   registry: AtomRegistry.AtomRegistry,
   atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, W>,
   input: W,
 ) => {
+  // The atom and its executor share these types when registered above.
+  const executor = mutationExecutors.get(atom) as MutationExecutor<A, E, W> | undefined;
+  if (executor) {
+    return Effect.acquireUseRelease(
+      Effect.sync(() => registry.mount(atom)),
+      () => executor.execute(registry, input),
+      (unmount) => Effect.sync(unmount),
+    );
+  }
   let locks = executionLocks.get(registry);
   if (!locks) {
     locks = new WeakMap();
     executionLocks.set(registry, locks);
   }
-  const operation = mutationOperations.get(atom) ?? atom;
-  let lock = locks.get(operation);
+  let lock = locks.get(atom);
   if (!lock) {
     lock = Semaphore.makeUnsafe(1);
-    locks.set(operation, lock);
+    locks.set(atom, lock);
   }
   // Wrappers across shows share the underlying RPC atom. Serialize its write/result
   // exchange so callers observe their own completion while other operations can proceed.
-  return Effect.runPromiseExit(
-    Effect.acquireUseRelease(
-      Effect.sync(() => registry.mount(atom)),
-      () =>
-        lock.withPermit(
-          Effect.gen(function* () {
-            registry.set(atom, input);
-            return yield* AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true });
-          }),
-        ),
-      (unmount) => Effect.sync(unmount),
-    ),
+  return Effect.acquireUseRelease(
+    Effect.sync(() => registry.mount(atom)),
+    () =>
+      lock.withPermit(
+        Effect.gen(function* () {
+          registry.set(atom, input);
+          return yield* AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true });
+        }),
+      ),
+    (unmount) => Effect.sync(unmount),
   );
 };
+
+export const executeMutation = <A, E, W>(
+  registry: AtomRegistry.AtomRegistry,
+  atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, W>,
+  input: W,
+) => Effect.runPromiseExit(runMutation(registry, atom, input));
