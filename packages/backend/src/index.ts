@@ -292,7 +292,21 @@ const makeRpcProtocol = (desktopCapability: string) =>
             yield* authorizeManagement(params.clientId, params.capability, "connections:read"),
           );
           if (denied) return denied;
+          const cannotCreate = authorizationResponse(
+            yield* authorizeManagement(params.clientId, params.capability, "connections:create"),
+          );
+          if (cannotCreate) return cannotCreate;
           if (!params.invitationId) return yield* notFound;
+          const invitation = (yield* connections.invitations).find(
+            (item) => item.invitationId === params.invitationId,
+          );
+          if (!invitation) return yield* notFound;
+          for (const scope of invitation.scopes) {
+            const cannotDelegate = authorizationResponse(
+              yield* authorizeManagement(params.clientId, params.capability, scope),
+            );
+            if (cannotDelegate) return cannotDelegate;
+          }
           return HttpServerResponse.jsonUnsafe(
             yield* connectionManager.pairingInfo(params.invitationId),
           );

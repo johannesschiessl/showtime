@@ -509,6 +509,29 @@ describe("Showtime WebSocket RPC", () => {
       const pairingInfo = await fetch(`${managerUrl}/pairing/${managed.invitationId}`);
       expect(pairingInfo.status).toBe(200);
       expect(await pairingInfo.json()).toMatchObject({ expiresAt: expect.any(String) });
+      const reader = await pair("Read only", ["connections:read"]);
+      expect((await fetch(`${managementUrl(reader)}/pairing/${managed.invitationId}`)).status).toBe(
+        403,
+      );
+      const limitedManager = await pair("Limited manager", [
+        "connections:read",
+        "connections:create",
+      ]);
+      expect(
+        (await fetch(`${managementUrl(limitedManager)}/pairing/${managed.invitationId}`)).status,
+      ).toBe(200);
+      const privileged = await create(managerUrl, "Privileged invitation", ["connections:delete"]);
+      const privilegedState = (await privileged.json()) as typeof createdState;
+      const privilegedInvitation = privilegedState.clients.find(
+        (client) => client.name === "Privileged invitation",
+      )!;
+      expect(
+        (
+          await fetch(
+            `${managementUrl(limitedManager)}/pairing/${privilegedInvitation.invitationId}`,
+          )
+        ).status,
+      ).toBe(403);
       expect(
         (await fetch(`${managerUrl}/${managed.invitationId}`, { method: "DELETE" })).status,
       ).toBe(200);
