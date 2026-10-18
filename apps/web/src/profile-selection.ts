@@ -12,12 +12,12 @@ const decodeProfileSelection = Schema.decodeUnknownSync(ProfileSelection, {
   onExcessProperty: "error",
 });
 
-export const readProfileSelection = (
-  storage: ReadableStorage = localStorage,
-): ProfileId | undefined => {
+export const readProfileSelection = (storage?: ReadableStorage): ProfileId | undefined => {
   try {
     return decodeProfileSelection(
-      JSON.parse(storage.getItem(profileSelectionStorageKey) ?? "null") as unknown,
+      JSON.parse(
+        (storage ?? localStorage).getItem(profileSelectionStorageKey) ?? "null",
+      ) as unknown,
     ).profileId;
   } catch {
     return undefined;

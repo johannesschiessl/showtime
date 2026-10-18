@@ -24,6 +24,22 @@ describe("profile selection persistence", () => {
     expect(readProfileSelection(storageWith("not-json"))).toBeUndefined();
   });
 
+  it("handles a browser that blocks access to storage itself", () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("Blocked", "SecurityError");
+      },
+    });
+    try {
+      expect(readProfileSelection()).toBeUndefined();
+    } finally {
+      if (previous) Object.defineProperty(globalThis, "localStorage", previous);
+      else Reflect.deleteProperty(globalThis, "localStorage");
+    }
+  });
+
   it.each([
     { profileId: "profile_0000000000000000" },
     { version: 0, profileId: "profile_0000000000000000" },
