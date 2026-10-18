@@ -8,6 +8,7 @@ export default defineConfig({
     exclude: [".repos/**", "node_modules/**", "**/node_modules/**"],
   },
   fmt: {
+    endOfLine: "lf",
     ignorePatterns: ["apps/web/src/routeTree.gen.ts", ".plans/**", ".repos/**"],
   },
   lint: {
