@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
+import { DatabaseSync } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -271,43 +271,29 @@ describe("Showtime database", () => {
       }),
     );
   });
-  it("upgrades the initial ledger without resetting existing data", async () => {
+  it("rejects the prerelease v1 layout without upgrading or resetting existing data", async () => {
     const home = await makeHome();
     await runDatabase(home, Effect.void);
-    const db = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
-    let profile: Record<string, SQLOutputValue> | undefined;
+    const filename = path.join(home, ".showtime", databaseFileName);
+    const db = new DatabaseSync(filename);
     try {
       db.exec(`DROP TRIGGER show_detach_chat_replies; DROP TRIGGER channel_detach_chat_replies;
       DROP TRIGGER chat_message_insert_counts;
       DROP TRIGGER chat_message_delete_counts;
       ALTER TABLE chat_messages DROP COLUMN channel_position;
-      DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;
-      DELETE FROM effect_sql_migrations WHERE migration_id >= 2;`);
+      DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;`);
       db.exec(`INSERT INTO shows VALUES ('show', 'Show', 'blue', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
       INSERT INTO chat_channels VALUES ('channel', 'show', 'General', '2026-01-01T00:00:00.000Z');
       INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, sent_at)
         VALUES ('message', 'show', 'channel', 'sender', 'Existing message', '2026-01-01T00:00:00.000Z');`);
-      profile = db.prepare("SELECT id FROM profiles").get();
     } finally {
       db.close();
     }
-    await runDatabase(home, Effect.void);
-    const upgraded = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
-    try {
-      expect(upgraded.prepare("SELECT id FROM profiles").get()).toEqual(profile);
-      expect(upgraded.prepare("SELECT body, channel_position FROM chat_messages").get()).toEqual({
-        body: "Existing message",
-        channel_position: 1,
-      });
-      expect(upgraded.prepare("SELECT message_count FROM chat_channel_counts").get()).toEqual({
-        message_count: 1,
-      });
-      expect(upgraded.prepare("SELECT COUNT(*) AS count FROM effect_sql_migrations").get()).toEqual(
-        { count: currentMigrations.length },
-      );
-    } finally {
-      upgraded.close();
-    }
+    const before = await readFile(filename);
+    await expect(runDatabase(home, Effect.void)).rejects.toBeInstanceOf(
+      UnsupportedPrereleaseStateError,
+    );
+    expect(await readFile(filename)).toEqual(before);
   });
   it("creates migration 1, bootstrap state, safety pragmas, and a consistent backup", async () => {
     const home = await makeHome();
@@ -329,9 +315,7 @@ describe("Showtime database", () => {
         return { ledger, settings, foreignKeys, busyTimeout, synchronous, backup };
       }),
     );
-    expect(result.ledger).toEqual(
-      currentMigrations.map(([migration_id, name]) => ({ migration_id, name })),
-    );
+    expect(result.ledger).toEqual([{ migration_id: 1, name: "initial" }]);
     expect(result.settings).toEqual([{ settings: 1, profiles: 1 }]);
     expect(result.foreignKeys).toEqual([{ foreign_keys: 1 }]);
     expect(result.busyTimeout).toEqual([{ timeout: 5000 }]);
@@ -582,15 +566,37 @@ describe("Showtime database", () => {
     },
   );
 
-  it("rejects unknown future ledger entries without opening the database for writes", async () => {
+  it.each([
+    [
+      "prerelease v2 ledger",
+      "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (2, 'chat_counts')",
+    ],
+    [
+      "prerelease v3 ledger",
+      "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (2, 'chat_counts'), (3, 'chat_reply_deletion')",
+    ],
+    [
+      "future ledger",
+      "INSERT INTO effect_sql_migrations (migration_id, name) VALUES (999, 'future')",
+    ],
+    [
+      "renamed baseline",
+      "UPDATE effect_sql_migrations SET name = 'prerelease' WHERE migration_id = 1",
+    ],
+    ["missing baseline", "DELETE FROM effect_sql_migrations"],
+    ["missing channel counts", "DROP TABLE chat_channel_counts"],
+    ["missing sender counts", "DROP TABLE chat_sender_counts"],
+    ["missing channel position", "ALTER TABLE chat_messages DROP COLUMN channel_position"],
+    ["missing insert counts trigger", "DROP TRIGGER chat_message_insert_counts"],
+    ["missing delete counts trigger", "DROP TRIGGER chat_message_delete_counts"],
+    ["missing show replies trigger", "DROP TRIGGER show_detach_chat_replies"],
+    ["missing channel replies trigger", "DROP TRIGGER channel_detach_chat_replies"],
+  ])("rejects %s without opening the database for writes", async (_name, setup) => {
     const home = await makeHome();
     await runDatabase(home, Effect.void);
     const filename = path.join(home, ".showtime", databaseFileName);
     const db = new DatabaseSync(filename);
-    db.prepare("INSERT INTO effect_sql_migrations (migration_id, name) VALUES (?, ?)").run(
-      999,
-      "future",
-    );
+    db.exec(setup);
     db.close();
     const before = await readFile(filename);
     await expect(runDatabase(home, Effect.void)).rejects.toBeInstanceOf(
