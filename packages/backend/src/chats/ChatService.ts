@@ -127,7 +127,6 @@ export class ChatService extends Context.Service<
       readonly profileId: ProfileId;
       readonly enabled: boolean;
     }) => Effect.Effect<void, RpcError>;
-    readonly deleteShow: (showId: ShowId) => Effect.Effect<void, RpcError>;
   }
 >()("@showtime/backend/chats/ChatService") {}
 
@@ -653,16 +652,6 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const deleteShow = (showId: ShowId) =>
-    Effect.all([
-      sql`DELETE FROM chat_channels WHERE show_id = ${showId}`,
-      sql`DELETE FROM chat_presets WHERE show_id = ${showId}`,
-    ]).pipe(
-      sql.withTransaction,
-      Effect.asVoid,
-      Effect.mapError((cause) => rpcError("Could not remove the show's chat.", cause)),
-    );
-
   return ChatService.of({
     state,
     createChannel,
@@ -674,7 +663,6 @@ const make = Effect.gen(function* () {
     send,
     markRead,
     setNotifications,
-    deleteShow,
   });
 });
 

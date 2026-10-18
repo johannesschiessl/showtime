@@ -158,9 +158,7 @@ describe("ChatService", () => {
           { concurrency: 1 },
         );
         const snapshot = yield* chats.state(showId, replacement.id);
-        yield* chats.deleteShow(showId);
-        const cleared = yield* chats.state(showId, replacement.id);
-        return { snapshot, deletedProfileId, cleared };
+        return { snapshot, deletedProfileId };
       }),
     );
 
@@ -175,9 +173,6 @@ describe("ChatService", () => {
     expect(result.snapshot.channels[1]!.messageCount).toBe(105);
     expect(result.snapshot.channels[1]!.messages).toHaveLength(100);
     expect(result.snapshot.channels[1]!.messages[0]!.body).toBe("Production replay 5");
-    expect(result.cleared.channels).toMatchObject([
-      { name: "General", messageCount: 0, messages: [] },
-    ]);
   });
 
   it("renames channels, deletes their related data, and preserves the final channel", async () => {
@@ -433,12 +428,13 @@ describe("ChatService", () => {
           body: "Done",
           replyToMessageId: request.id,
         });
-        yield* chats.deleteShow(showId);
-        return yield* chats.state(showId, profileId);
+        const shows = yield* ShowService;
+        yield* shows.delete(showId);
+        return yield* shows.list;
       }),
     );
 
-    expect(result.channels).toMatchObject([{ name: "General", messageCount: 0, messages: [] }]);
+    expect(result).toEqual([]);
   });
 
   it("treats an empty rich-parts array as a plain message", async () => {

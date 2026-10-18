@@ -49,7 +49,7 @@ const handlers = ShowtimeRpcs.toLayer(
             ...songsSyncKey(id),
             ...chatsSyncKey(id),
           ],
-          shows.delete(id).pipe(Effect.andThen(chats.deleteShow(id))),
+          shows.delete(id),
         ),
       "profiles.list": () => sync.query(profilesSyncKey, profiles.list),
       "profiles.create": ({ name, color }) =>
