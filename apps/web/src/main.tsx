@@ -28,16 +28,22 @@ if (import.meta.hot) {
 }
 restorePwaConnectionHandoff();
 void registerServiceWorker();
-const pairing = await capturePairingFragment();
+const pairingRequest = capturePairingFragment();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {pairing.status === "failed" ? (
-      <ConnectToShowtime error={pairing.message} />
-    ) : (
-      <SynchronizedApp />
-    )}
+    <Startup />
   </React.StrictMode>,
 );
+
+function Startup() {
+  const [pairing, setPairing] = React.useState<Awaited<typeof pairingRequest>>();
+  React.useEffect(() => {
+    void pairingRequest.then(setPairing);
+  }, []);
+  if (!pairing) return <ConnectToShowtime pending />;
+  if (pairing.status === "failed") return <ConnectToShowtime error={pairing.message} />;
+  return <SynchronizedApp />;
+}
 
 function SynchronizedApp() {
   const connection = useConnectionSnapshot();

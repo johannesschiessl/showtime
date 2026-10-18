@@ -19,6 +19,30 @@ const scopes = ["connections:read", "connections:create", "connections:delete"] 
 const clientProfile = "profile_0000000000000000";
 
 describe("browser connection persistence", () => {
+  it.each(["headers", "body"])("bounds pairing while waiting for %s", async (stalled) => {
+    const request = vi
+      .fn()
+      .mockImplementation(() =>
+        stalled === "headers"
+          ? new Promise(() => {})
+          : Promise.resolve(new Response(new ReadableStream({ start() {} }))),
+      );
+    const storage = { setItem: vi.fn(), removeItem: vi.fn() };
+    await expect(
+      capturePairingFragment(
+        { hash: `#pair=${pairingToken}`, pathname: "/", search: "" },
+        storage,
+        { replaceState: vi.fn() },
+        request,
+        5,
+      ),
+    ).resolves.toMatchObject({ status: "failed" });
+    expect(request.mock.calls[0]![1].signal.aborted).toBe(true);
+    expect(storage.setItem).not.toHaveBeenCalledWith(
+      showtimeConnectionStorageKey,
+      expect.anything(),
+    );
+  });
   it("accepts only safe Showtime connection links", () => {
     const generated = `http://showtime-foh.local:8585/#pair=${pairingToken}&profile=${clientProfile}`;
     expect(parseShowtimePairingUrl(generated, "https://app.example/")).toBe(generated);
@@ -75,7 +99,10 @@ describe("browser connection persistence", () => {
         request,
       ),
     ).resolves.toEqual({ status: "paired" });
-    expect(request).toHaveBeenCalledWith(`/pair/${pairingToken}`, { method: "POST" });
+    expect(request).toHaveBeenCalledWith(`/pair/${pairingToken}`, {
+      method: "POST",
+      signal: expect.any(AbortSignal),
+    });
     expect(setItem).toHaveBeenCalledWith(
       showtimeConnectionStorageKey,
       JSON.stringify({ version: 1, clientId, capability, clientProfile, scopes }),

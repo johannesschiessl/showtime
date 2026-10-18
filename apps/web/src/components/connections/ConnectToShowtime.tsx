@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/empty";
 import { ConnectionLinkDialog } from "./ConnectionLinkDialog";
 
-export function ConnectToShowtime({ error }: { readonly error?: string }) {
+export function ConnectToShowtime({
+  error,
+  pending = false,
+}: {
+  readonly error?: string;
+  readonly pending?: boolean;
+}) {
   const [connectOpen, setConnectOpen] = React.useState(false);
 
   return (
@@ -21,10 +27,18 @@ export function ConnectToShowtime({ error }: { readonly error?: string }) {
           <EmptyMedia variant="icon">
             <RadioTowerIcon />
           </EmptyMedia>
-          <EmptyTitle>{error ? "Could not connect to Showtime" : "Connect to Showtime"}</EmptyTitle>
+          <EmptyTitle>
+            {pending
+              ? "Connecting to Showtime…"
+              : error
+                ? "Could not connect to Showtime"
+                : "Connect to Showtime"}
+          </EmptyTitle>
           <EmptyDescription>
-            {error ??
-              "On the show computer, add this device under Connections. Then copy and open its connection link on this device."}
+            {pending
+              ? "Saving this device's connection. This may take a few seconds."
+              : (error ??
+                "On the show computer, add this device under Connections. Then copy and open its connection link on this device.")}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
