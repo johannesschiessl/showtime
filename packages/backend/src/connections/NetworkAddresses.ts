@@ -16,6 +16,7 @@ export class NetworkAddresses extends Context.Service<
 const isPrivateIpv4 = (address: string) =>
   address.startsWith("10.") ||
   address.startsWith("192.168.") ||
+  address.startsWith("169.254.") ||
   /^172\.(1[6-9]|2\d|3[01])\./.test(address);
 
 export const discoverCandidates = (
@@ -28,7 +29,13 @@ export const discoverCandidates = (
       (addresses ?? [])
         .filter(
           (address) =>
-            address.family === "IPv4" && !address.internal && isPrivateIpv4(address.address),
+            !address.internal &&
+            (address.family === "IPv4"
+              ? isPrivateIpv4(address.address)
+              : address.family === "IPv6" &&
+                address.scopeid === 0 &&
+                !address.address.toLowerCase().startsWith("fe80:") &&
+                !address.address.toLowerCase().startsWith("ff")),
         )
         .map((address) => ({
           kind: "ip-address" as const,

@@ -39,7 +39,7 @@ export const showtimeHostnameLabel = (hostName: ShowtimeHostName): ShowtimeHostn
 export const showtimeLocalHostname = (label: ShowtimeHostnameLabel) => `${label}.local`;
 
 export const showtimePairingUrl = (host: string, pairingToken: string, port = showtimeLocalPort) =>
-  `http://${host}:${port}/#pair=${encodeURIComponent(pairingToken)}`;
+  `http://${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}/#pair=${encodeURIComponent(pairingToken)}`;
 
 export const showtimeHostnamePairingUrl = (
   label: ShowtimeHostnameLabel,

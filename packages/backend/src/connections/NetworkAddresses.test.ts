@@ -12,6 +12,30 @@ const address = (value: string) => ({
 });
 
 describe("discoverCandidates", () => {
+  it("includes DHCP-free IPv4 and routable IPv6 without offering scoped IPv6 URLs", () => {
+    const ipv6 = (value: string, scopeid = 0) => ({
+      ...address(value),
+      family: "IPv6" as const,
+      scopeid,
+    });
+    const candidates = discoverCandidates(
+      {
+        ethernet: [
+          address("169.254.10.2"),
+          ipv6("fd00::2"),
+          ipv6("2001:db8::2"),
+          ipv6("fe80::2", 3),
+        ],
+      },
+      8585,
+      "token",
+    );
+    expect(candidates.map((candidate) => candidate.url)).toEqual([
+      "http://169.254.10.2:8585/#pair=token",
+      "http://[fd00::2]:8585/#pair=token",
+      "http://[2001:db8::2]:8585/#pair=token",
+    ]);
+  });
   it("only exposes private LAN IPv4 addresses", () => {
     const interfaces = {
       ethernet: [address("192.168.1.20"), address("203.0.113.10")],

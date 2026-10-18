@@ -79,7 +79,7 @@ let backendStarted = false;
 let backendShutdownStarted = false;
 let appearancePreference: ShowtimeThemePreference = "system";
 let appearanceWrite = Promise.resolve();
-const rpcHost = "0.0.0.0";
+const rpcHost = "::";
 const rpcPort = showtimeLocalPort;
 const backendRuntime = makeBackendRuntime({
   host: rpcHost,
