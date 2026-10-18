@@ -143,6 +143,8 @@ function RouteComponent() {
     <React.Fragment>
       <LiveSong song={view} />
       <LiveSongNavigation
+        hasPrevious={previous !== undefined}
+        hasNext={next !== undefined}
         previous={previous?.name}
         next={next?.name}
         onPrevious={selectPreviousSong}
