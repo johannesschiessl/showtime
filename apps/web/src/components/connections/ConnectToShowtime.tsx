@@ -46,8 +46,8 @@ export function ConnectToShowtime({
             <LinkIcon /> Paste connection link
           </Button>
           <p className="max-w-sm text-xs text-muted-foreground">
-            Keep both devices on the same local network. Connection links can also be sent through
-            WhatsApp or another messaging app.
+            Keep both devices on a trusted private network. HTTP connections send credentials and
+            show data without encryption. Share connection links only with the show team.
           </p>
         </EmptyContent>
       </Empty>
