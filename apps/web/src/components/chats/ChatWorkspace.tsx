@@ -83,6 +83,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useSelectedProfile } from "@/profiles";
 import { ShowTitleBarPortal } from "@/components/shows/ShowTitleBarPortal";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 
 export function ChatWorkspace({
   showId,
@@ -651,22 +652,29 @@ function ReadTracker({
   const { end: canScrollToEnd } = useMessageScrollerScrollable();
   const markRead = useRpcMutation(chatAtoms(showId, profileId).markRead);
   const atBottom = !canScrollToEnd;
+  const visible = useDocumentVisible();
   const lastMarked = React.useRef(channel.lastReadSequence);
 
   React.useEffect(() => {
-    setChatPresence(active ? { showId, channelId: channel.id, profileId, atBottom } : undefined);
+    setChatPresence(
+      active && visible ? { showId, channelId: channel.id, profileId, atBottom } : undefined,
+    );
     return () => setChatPresence(undefined);
-  }, [active, atBottom, channel.id, profileId, showId]);
+  }, [active, visible, atBottom, channel.id, profileId, showId]);
 
   React.useEffect(() => {
-    if (!active || !atBottom || channel.newestSequence <= lastMarked.current) return;
+    if (!active || !visible || !atBottom || channel.newestSequence <= lastMarked.current) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let cancelRetryWait: (() => void) | undefined;
 
     const markNewestRead = async () => {
       let retryDelay = 250;
-      while (!cancelled && channel.newestSequence > lastMarked.current) {
+      while (
+        !cancelled &&
+        document.visibilityState === "visible" &&
+        channel.newestSequence > lastMarked.current
+      ) {
         const exit = await markRead({
           payload: {
             showId,
@@ -699,7 +707,7 @@ function ReadTracker({
       if (retryTimer !== undefined) clearTimeout(retryTimer);
       cancelRetryWait?.();
     };
-  }, [active, atBottom, channel.id, channel.newestSequence, markRead, profileId, showId]);
+  }, [active, visible, atBottom, channel.id, channel.newestSequence, markRead, profileId, showId]);
   return null;
 }
 
