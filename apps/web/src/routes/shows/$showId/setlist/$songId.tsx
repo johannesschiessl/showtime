@@ -134,6 +134,7 @@ function RouteComponent() {
 
   return (
     <SongDetail
+      key={`${typedShowId}:${song.id}`}
       showId={typedShowId}
       song={song}
       number={songNumber}
