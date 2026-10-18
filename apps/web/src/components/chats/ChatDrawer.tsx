@@ -1,7 +1,6 @@
 import { asyncResultValueOrElse } from "@/client";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
 import type { ChatChannelId, Profile, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
 import { consumeChatOpenRequest, subscribeChatOpenRequests } from "@/chats/ChatNavigation";
@@ -39,18 +38,23 @@ export function ChatDrawer(props: ChatDrawerProps) {
   );
 }
 
+function useChatUnreadCount(showId: ShowId, profileId: ProfileId) {
+  const result = useAtomValue(chatAtoms(showId, profileId).state);
+  return (
+    asyncResultValueOrElse(result, () => undefined)?.channels.reduce(
+      (total, channel) => total + channel.unreadCount,
+      0,
+    ) ?? 0
+  );
+}
+
 function ProfileChatDrawer({
   profile,
   ...props
 }: ChatDrawerProps & {
   readonly profile: Profile;
 }) {
-  const result = useAtomValue(chatAtoms(props.showId, profile.id).state);
-  const unreadCount =
-    asyncResultValueOrElse(result, () => undefined)?.channels.reduce(
-      (total, channel) => total + channel.unreadCount,
-      0,
-    ) ?? 0;
+  const unreadCount = useChatUnreadCount(props.showId, profile.id);
   return <ChatDrawerView {...props} unreadCount={unreadCount} />;
 }
 
@@ -133,10 +137,7 @@ function ProfileChatUnreadBadge({
   readonly showId: ShowId;
   readonly profileId: ProfileId;
 }) {
-  const result = useAtomValue(chatAtoms(showId, profileId).state);
-  const unreadCount = AsyncResult.isSuccess(result)
-    ? result.value.channels.reduce((total, channel) => total + channel.unreadCount, 0)
-    : 0;
+  const unreadCount = useChatUnreadCount(showId, profileId);
   return unreadCount > 0 ? (
     <Badge className="min-w-5 justify-center px-1">{unreadCount > 99 ? "99+" : unreadCount}</Badge>
   ) : null;

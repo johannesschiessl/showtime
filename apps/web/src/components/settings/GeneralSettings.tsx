@@ -32,7 +32,8 @@ export function isUnchangedShowSave(
 }
 
 export function GeneralSettings() {
-  const { show, result } = useShowFromParams();
+  // Optimistic values and rollbacks must not become the draft's server baseline.
+  const { show, result } = useShowFromParams({ optimistic: false });
   const navigate = useNavigate();
   let content: React.ReactNode;
 
@@ -70,13 +71,11 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
   const pendingSaves = React.useRef(0);
   const suppressNextBlurSave = React.useRef(false);
   const committed = React.useRef({ name: show.name as string, color: show.color });
-  const previousRemote = React.useRef(committed.current);
   const draft = React.useRef(committed.current);
 
   React.useEffect(() => {
     const incoming = { name: show.name as string, color: show.color };
-    const merged = mergeRemoteDraft(draft.current, previousRemote.current, incoming);
-    previousRemote.current = incoming;
+    const merged = mergeRemoteDraft(draft.current, committed.current, incoming);
     committed.current = incoming;
     draft.current = merged;
     setName(merged.name);
@@ -96,8 +95,13 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
         committed.current,
         pendingSaves.current,
       )
-    )
+    ) {
+      if (draft.current.name === nextName) {
+        draft.current = { ...draft.current, name: trimmed };
+        setName(trimmed);
+      }
       return;
+    }
     pendingSaves.current += 1;
     setSaving(true);
     setError(undefined);
@@ -110,7 +114,16 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
         if (Exit.isFailure(result)) {
           setError(rpcErrorMessageFromCause(result.cause));
         } else {
-          committed.current = { name: trimmed, color: nextColor };
+          const confirmed = { name: result.value.name as string, color: result.value.color };
+          const merged = mergeRemoteDraft(
+            draft.current,
+            { name: nextName, color: nextColor },
+            confirmed,
+          );
+          committed.current = confirmed;
+          draft.current = merged;
+          setName(merged.name);
+          setColor(merged.color);
           setError(undefined);
         }
       })

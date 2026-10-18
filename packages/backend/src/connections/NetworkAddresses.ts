@@ -34,7 +34,7 @@ export const discoverCandidates = (
               ? isPrivateIpv4(address.address)
               : address.family === "IPv6" &&
                 address.scopeid === 0 &&
-                !address.address.toLowerCase().startsWith("fe80:") &&
+                !/^fe[89ab][0-9a-f]:/i.test(address.address) &&
                 !address.address.toLowerCase().startsWith("ff")),
         )
         .map((address) => ({

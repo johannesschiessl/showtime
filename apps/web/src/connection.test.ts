@@ -157,6 +157,28 @@ describe("browser connection persistence", () => {
     expect(replaceState).not.toHaveBeenCalled();
   });
 
+  it("removes a consumed fragment when the successful response is not JSON", async () => {
+    const replaceState = vi.fn();
+    const storage = { setItem: vi.fn(), removeItem: vi.fn() };
+    await expect(
+      capturePairingFragment(
+        { hash: `#pair=${pairingToken}`, pathname: "/connect", search: "?view=devices" },
+        storage,
+        { replaceState },
+        vi.fn().mockResolvedValue(new Response("invalid JSON", { status: 200 })),
+      ),
+    ).resolves.toEqual({
+      status: "failed",
+      message: "Showtime returned invalid connection details.",
+    });
+    expect(replaceState).toHaveBeenCalledWith(null, "", "/connect?view=devices#/");
+    expect(storage.setItem).not.toHaveBeenCalledWith(
+      showtimeConnectionStorageKey,
+      expect.anything(),
+    );
+    expect(storage.removeItem).toHaveBeenCalledWith(`${showtimeConnectionStorageKey}.probe`);
+  });
+
   it("removes a consumed pairing fragment when saving the exchanged credentials fails", async () => {
     const replaceState = vi.fn();
     const setItem = vi.fn((key: string) => {

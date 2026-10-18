@@ -20,6 +20,7 @@ const frontend = makeShowtimeFrontend({
 
 export const {
   RpcClient,
+  confirmedShowsAtom,
   createShowAtom,
   deleteShowAtom,
   editShowAtom,

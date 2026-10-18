@@ -5,7 +5,7 @@ export const mergeRemoteDraft = <Draft extends object>(
   incoming: Draft,
 ): Draft => {
   const merged = { ...incoming };
-  for (const key in incoming) {
+  for (const key in { ...draft, ...incoming }) {
     if (JSON.stringify(draft[key]) !== JSON.stringify(previous[key])) merged[key] = draft[key];
   }
   return merged;

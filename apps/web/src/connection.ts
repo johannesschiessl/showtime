@@ -13,8 +13,9 @@ import { Schema } from "effect";
 
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
+export const hasPairingFragment = (hash: string) => hash.startsWith(fragmentPrefix);
 const pairingTokenFromFragment = (hash: string) => {
-  if (!hash.startsWith(fragmentPrefix)) return undefined;
+  if (!hasPairingFragment(hash)) return undefined;
   const token = new URLSearchParams(hash.slice(1)).get("pair") ?? "";
   return pairingTokenPattern.test(token) ? token : undefined;
 };
@@ -128,7 +129,7 @@ export const capturePairingFragment = async (
   request: typeof fetch = fetch,
   timeoutMs = connectionRequestTimeoutMs,
 ): Promise<PairingResult> => {
-  if (!location.hash.startsWith(fragmentPrefix)) return { status: "none" };
+  if (!hasPairingFragment(location.hash)) return { status: "none" };
   const token = pairingTokenFromFragment(location.hash);
   const removePairingFragment = () =>
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);
@@ -193,7 +194,14 @@ export const capturePairingFragment = async (
     response = await withRequestTimeout(
       async (signal) => {
         const response = await request(`/pair/${token}`, { method: "POST", signal });
-        if (response.ok) parsed = await response.json();
+        if (response.ok) {
+          try {
+            parsed = await response.json();
+          } catch {
+            // A successful exchange consumed the invitation, even if its body is invalid.
+            // Let credential validation report the invalid details and remove the fragment.
+          }
+        }
         return response;
       },
       timeoutMs,

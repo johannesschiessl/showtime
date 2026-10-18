@@ -8,8 +8,8 @@ are not application state.
 
 The move to `showtime.db` is a clean reset, not a migration from the current development builds.
 Migration `0001_initial` creates the baseline schema. Forward migrations add maintained chat
-counts and detach reply relationships before parent deletion. Complete databases with a known
-ledger prefix upgrade in place; unknown histories and incomplete schemas are rejected.
+counts and detach reply relationships before parent deletion. Databases with a known ledger prefix
+that pass preflight upgrade in place; unknown histories and unsupported layouts are rejected.
 
 Chat messages have a channel-local position, assigned by the insert-count trigger. Snapshots use
 that position to compute unread totals through indexed lookups. Message history is append-only;
@@ -24,16 +24,17 @@ formats:
 - `chats.db`;
 - discovered show JSON files;
 - raw or prefixed prerelease chat-message envelopes; or
-- an experimental `showtime.db` whose Effect migration ledger and current schema do not match.
+- an experimental `showtime.db` whose Effect migration ledger or required schema objects fail
+  preflight checks.
 
 A preflight guard detects known prerelease backend state before opening or creating the database. It
 fails startup with an actionable reset message and leaves every file untouched, even when a current
 database also exists. This guard is not a migration and must never contain an importer.
 
 An existing `showtime.db` is usable only when its `effect_sql_migrations` history is a valid prefix
-of the migrations shipped by Showtime, with the complete schema required by that prefix.
-Forward migrations accept only those known SQLite versions; prerelease JSON and experimental
-database formats never become supported sources.
+of the migrations shipped by Showtime and it passes the schema checks listed below. This includes
+databases created by prerelease builds with that known history and those required objects.
+Prerelease JSON and experimental databases that fail these checks remain unsupported.
 
 Browser local storage is an unavoidable device-local exception: a remote browser cannot open the
 host's SQLite database. It contains connection credentials and device preferences, not
@@ -200,17 +201,30 @@ and generated initial profile IDs after DDL is complete.
 
 The validation layer then verifies:
 
-1. the applied migration IDs and names match the shipped released prefix;
+1. the applied migration IDs and names match the shipped migrations;
 2. there are no gaps, unknown IDs, renamed entries, or future entries;
-3. critical tables, indexes, constraints, and foreign-key enforcement exist;
+3. required tables, indexes, and migration-specific triggers exist, and the critical tables have
+   the expected ordered column names;
 4. bootstrap invariants hold, including exactly one settings row and a valid default profile; and
-5. `PRAGMA quick_check` or the documented integrity check succeeds.
+5. `PRAGMA quick_check` and `PRAGMA foreign_key_check` succeed, and connection safety settings
+   are active.
 
-The current validator also compares the exact ordered column set of every critical table, checks
-the required index names, runs `PRAGMA foreign_key_check`, and reads back WAL, foreign-key,
-busy-timeout, and synchronous settings. Existing databases are inspected read-only before the
-write-capable client is acquired so experimental or future ledgers are rejected without being
-modified.
+The exact required names and ordered columns are defined by `criticalTables`, `criticalIndexes`,
+`migrationObjects`, and `expectedColumns` in
+[`Database.ts`](../packages/backend/src/database/Database.ts). The required indexes are
+`app_settings_default_profile`, `connection_clients_profile`, `shows_name_id`,
+`microphones_show_active_order`, `mixes_show_active_order`, `songs_show_active_order`,
+`chat_messages_channel_sequence`, and `chat_presets_show_updated`. Migration 2 also requires the
+`chat_channel_counts` and `chat_sender_counts` tables and the `chat_message_insert_counts` and
+`chat_message_delete_counts` triggers. Migration 3 requires the `show_detach_chat_replies` and
+`channel_detach_chat_replies` triggers.
+
+Preflight inspects existing databases read-only before startup writes. It accepts a known prefix
+and checks only the objects required at that version, along with bootstrap state and both SQLite
+integrity checks. It does not compare full DDL, index definitions, or every migration-defined
+constraint and index. After migrations, the current validator requires the full shipped ledger
+and reads back WAL, foreign-key enforcement, busy-timeout, and synchronous settings. An unsupported
+or future ledger is rejected without modifying the database.
 
 Historical chat sender IDs are deliberately retained after a non-default profile is deleted. They
 are immutable attribution data, not profile ownership, so `chat_messages.sender_profile_id` is
@@ -221,22 +235,23 @@ Only then does the layer provide `DatabaseReady`.
 
 ## Authoring future migrations
 
-After the first public release, every breaking persisted-schema change is a new forward migration.
+Once a migration ships in a Showtime build, every breaking persisted-schema change is a new forward
+migration.
 
 1. Add the next immutable numeric ID and a descriptive snake-case name.
 2. Default-export one named/traceable migration Effect requiring `SqlClient`.
 3. Perform schema and data changes within the migrator's transaction.
 4. Use Effect Schema to validate structured values while backfilling them.
 5. Make current repositories read and write only the new representation.
-6. Retain a fixture produced by the previous released Showtime version.
+6. Retain a fixture produced by the previous shipped Showtime version.
 7. Test migration, rollback on failure, repeat startup, and packaged loading.
 8. Update this document when operational behavior changes.
 
-Never edit, delete, reorder, or rename a released migration. Fix mistakes with a new forward
+Never edit, delete, reorder, or rename a shipped migration. Fix mistakes with a new forward
 migration. Automatic downgrade and rollback migrations are not supported.
 
 Cross-version application compatibility should be handled in the schema rollout itself: add data,
-backfill it, switch current code, and remove obsolete data in a later released migration when
+backfill it, switch current code, and remove obsolete data in a later shipped migration when
 necessary. Do not spread old-shape branches through repositories and domain services.
 
 ## Rejection and failure behavior

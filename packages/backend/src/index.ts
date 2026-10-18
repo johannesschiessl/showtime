@@ -52,7 +52,8 @@ export interface BackendOptions {
 
 const rpcWebSocketHost = (host: string) => {
   if (host === "0.0.0.0") return "127.0.0.1";
-  if (host === "::") return "[::1]";
+  // CSP host sources cannot contain IPv6 literals. localhost also reaches IPv6 listeners.
+  if (host === "::") return "localhost";
   return host.includes(":") && !host.startsWith("[") ? `[${host}]` : host;
 };
 
@@ -300,8 +301,7 @@ const makeRpcProtocol = (desktopCapability: string) =>
           const invitation = (yield* connections.invitations).find(
             (item) => item.invitationId === params.invitationId,
           );
-          if (!invitation) return yield* notFound;
-          for (const scope of invitation.scopes) {
+          for (const scope of invitation?.scopes ?? []) {
             const cannotDelegate = authorizationResponse(
               yield* authorizeManagement(params.clientId, params.capability, scope),
             );
@@ -375,7 +375,9 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
     // Build the RPC server and its routes together in serve's private memo map.
     return HttpRouter.serve(
       Layer.mergeAll(rpcServer, staticFiles.pipe(Layer.provide(remoteHostingGate))),
-      // Authentication credentials are carried in request paths, including on failed routes.
+      // Intentionally suppress all request logs, including unrelated response statuses and
+      // errors: authentication credentials can occur even in unmatched request paths.
+      // Domain and startup logs remain enabled.
       { disableListenLog: true, disableLogger: true },
     ).pipe(Layer.provide(RpcSerialization.layerJson));
   })();

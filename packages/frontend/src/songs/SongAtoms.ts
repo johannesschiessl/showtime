@@ -1,3 +1,4 @@
+import { optimisticMutation } from "../rpc/Mutation.js";
 import { DateTime, Option } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
 import { insertSongAfter, type ShowId, type Song } from "@showtime/contracts";
@@ -17,7 +18,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
     const query = latestSnapshot(RpcClient.query("songs.list", { showId }), options);
     const songs = query.pipe(Atom.optimistic);
     const create = songs.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: MutationInput<typeof createSongMutation>) => {
           if (!AsyncResult.isSuccess(current)) return current;
           const now = DateTime.nowUnsafe();
@@ -37,7 +38,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
       }),
     );
     const deleteSong = songs.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: MutationInput<typeof deleteSongMutation>) =>
           AsyncResult.isSuccess(current)
             ? AsyncResult.success(current.value.filter((song) => song.id !== input.payload.id))
@@ -46,7 +47,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
       }),
     );
     const edit = songs.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: MutationInput<typeof editSongMutation>) => {
           if (!AsyncResult.isSuccess(current)) return current;
           const notes = input.payload.notes?.trim();
@@ -72,7 +73,7 @@ export const makeSongAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
       }),
     );
     const reorder = songs.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: MutationInput<typeof reorderSongsMutation>) => {
           if (!AsyncResult.isSuccess(current)) return current;
           const byId = new Map(current.value.map((song) => [song.id, song]));

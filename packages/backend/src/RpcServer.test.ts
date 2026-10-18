@@ -60,7 +60,7 @@ describe("Showtime WebSocket RPC", () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-invalidation-"));
     tempHomes.add(homeDirectory);
     const runtime = makeBackendRuntime({
-      host: "127.0.0.1",
+      host: "::",
       port: await findAvailablePort(),
       homeDirectory,
     });
@@ -68,6 +68,7 @@ describe("Showtime WebSocket RPC", () => {
       const url = await runtime.runPromise(
         Effect.flatMap(ConnectionManager, (_) => _.rpcWebSocketUrl),
       );
+      expect(new URL(url).hostname).toBe("localhost");
       const protocol = RpcClient.layerProtocolSocket().pipe(
         Layer.provide(NodeSocket.layerWebSocket(url)),
         Layer.provide(RpcSerialization.layerJson),
@@ -615,6 +616,13 @@ describe("Showtime WebSocket RPC", () => {
       expect(
         (await fetch(`${managerUrl}/${managed.invitationId}`, { method: "DELETE" })).status,
       ).toBe(200);
+      const removedInvitation = await fetch(`${managerUrl}/pairing/${managed.invitationId}`);
+      expect(removedInvitation.status).toBe(200);
+      expect(await removedInvitation.json()).toEqual({
+        discovery: { kind: "disabled" },
+        candidates: [],
+        expiresAt: null,
+      });
 
       const creator = await pair("Creator only", ["connections:create"]);
       expect(

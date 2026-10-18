@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -275,18 +275,22 @@ describe("Showtime database", () => {
     const home = await makeHome();
     await runDatabase(home, Effect.void);
     const db = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
-    db.exec(`DROP TRIGGER show_detach_chat_replies; DROP TRIGGER channel_detach_chat_replies;
+    let profile: Record<string, SQLOutputValue> | undefined;
+    try {
+      db.exec(`DROP TRIGGER show_detach_chat_replies; DROP TRIGGER channel_detach_chat_replies;
       DROP TRIGGER chat_message_insert_counts;
       DROP TRIGGER chat_message_delete_counts;
       ALTER TABLE chat_messages DROP COLUMN channel_position;
       DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;
       DELETE FROM effect_sql_migrations WHERE migration_id >= 2;`);
-    db.exec(`INSERT INTO shows VALUES ('show', 'Show', 'blue', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      db.exec(`INSERT INTO shows VALUES ('show', 'Show', 'blue', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
       INSERT INTO chat_channels VALUES ('channel', 'show', 'General', '2026-01-01T00:00:00.000Z');
       INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, sent_at)
         VALUES ('message', 'show', 'channel', 'sender', 'Existing message', '2026-01-01T00:00:00.000Z');`);
-    const profile = db.prepare("SELECT id FROM profiles").get();
-    db.close();
+      profile = db.prepare("SELECT id FROM profiles").get();
+    } finally {
+      db.close();
+    }
     await runDatabase(home, Effect.void);
     const upgraded = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
     try {

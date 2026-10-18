@@ -2,11 +2,11 @@ import { useParams } from "@tanstack/react-router";
 import { Option } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { useAtomValue } from "@effect/atom-react";
-import { showsAtom } from "@/client";
+import { confirmedShowsAtom, showsAtom } from "@/client";
 
-export function useShowFromParams() {
+export function useShowFromParams(options?: { readonly optimistic?: boolean }) {
   const params = useParams({ strict: false });
-  const showsResult = useAtomValue(showsAtom);
+  const showsResult = useAtomValue(options?.optimistic === false ? confirmedShowsAtom : showsAtom);
   const shows = AsyncResult.isSuccess(showsResult)
     ? showsResult.value
     : AsyncResult.isFailure(showsResult)

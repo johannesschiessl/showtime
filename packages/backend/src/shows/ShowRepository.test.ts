@@ -79,6 +79,10 @@ describe("ShowRepository", () => {
           }
         }
         yield* shows.edit({ id: created.id, name: "Renamed", color: "blue" });
+        expect((yield* repository.findById(created.id)).config).toMatchObject({
+          name: "Renamed",
+          color: "blue",
+        });
         expect(yield* sql`SELECT * FROM child_writes`).toEqual([]);
         yield* repository.update(created.id, (document) => ({
           ...document,

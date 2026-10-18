@@ -1,3 +1,4 @@
+import { optimisticMutation } from "../rpc/Mutation.js";
 import { DateTime } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
 import type { Color, ShowId } from "@showtime/contracts";
@@ -89,7 +90,7 @@ export const makeNumberedResourceAtomFamily = <
   Atom.family((showId: ShowId) => {
     const items = options.query(showId).pipe(Atom.optimistic);
     const create = items.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: CreateArg) => {
           if (!AsyncResult.isSuccess(current)) return current;
           const now = DateTime.nowUnsafe();
@@ -107,7 +108,7 @@ export const makeNumberedResourceAtomFamily = <
       }),
     );
     const edit = items.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: EditArg) => {
           if (!AsyncResult.isSuccess(current)) return current;
           const updatedAt = DateTime.nowUnsafe();
@@ -121,7 +122,7 @@ export const makeNumberedResourceAtomFamily = <
       }),
     );
     const deleteResource = items.pipe(
-      Atom.optimisticFn({
+      optimisticMutation({
         reducer: (current, input: DeleteArg) => {
           if (!AsyncResult.isSuccess(current)) return current;
           return AsyncResult.success(current.value.filter((item) => item.id !== input.payload.id));

@@ -430,11 +430,19 @@ describe("ChatService", () => {
         });
         const shows = yield* ShowService;
         yield* shows.delete(showId);
-        return yield* shows.list;
+        return { showId, shows: yield* shows.list };
       }),
     );
 
-    expect(result).toEqual([]);
+    expect(result.shows).toEqual([]);
+    const messages = await withDatabase(
+      home,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        return yield* sql`SELECT id FROM chat_messages WHERE show_id = ${result.showId}`;
+      }),
+    );
+    expect(messages).toEqual([]);
   });
 
   it("treats an empty rich-parts array as a plain message", async () => {
