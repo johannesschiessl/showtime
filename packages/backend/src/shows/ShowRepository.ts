@@ -21,6 +21,7 @@ import {
   type SongMixAssignment,
 } from "@showtime/contracts";
 import { DatabaseReady } from "../database/Database.js";
+import { isDeepStrictEqual } from "node:util";
 
 export interface ShowDocument {
   readonly config: typeof ShowConfig.Type;
@@ -270,41 +271,82 @@ const make = Effect.fn("ShowRepository.make")(function* () {
 
   const insertChildren = Effect.fn("ShowRepository.insertChildren")(function* (
     document: ShowDocument,
+    previous?: ShowDocument,
   ) {
     const showId = document.config.id;
-    for (const [position, microphone] of document.microphones.entries())
+    // Move reordered rows out of the unique position range before assigning final positions.
+    for (const key of ["songs", "microphones", "mixes"] as const) {
+      const before = previous?.[key] ?? [];
+      const after = document[key];
+      const offset = before.length + after.length;
+      const positions = new Map(after.map((item, index) => [item.id, index]));
+      for (const [position, item] of before.entries()) {
+        const nextPosition = positions.get(item.id);
+        if (nextPosition === undefined)
+          yield* sql`DELETE FROM ${sql(key)} WHERE show_id = ${showId} AND id = ${item.id}`;
+        else if (nextPosition !== position)
+          yield* sql`UPDATE ${sql(key)} SET position = ${position + offset}
+            WHERE show_id = ${showId} AND id = ${item.id}`;
+      }
+    }
+    for (const [position, microphone] of document.microphones.entries()) {
+      if (isDeepStrictEqual(previous?.microphones[position], microphone)) continue;
       yield* sql`INSERT INTO microphones
         (id, show_id, position, number, color, name, created_at, updated_at, deleted_at)
         VALUES (${microphone.id}, ${showId}, ${position}, ${microphone.number}, ${microphone.color},
           ${microphone.name ?? null}, ${DateTime.formatIso(microphone.createdAt)},
           ${DateTime.formatIso(microphone.updatedAt)},
-          ${microphone.deletedAt ? DateTime.formatIso(microphone.deletedAt) : null})`;
-    for (const [position, mix] of document.mixes.entries())
+          ${microphone.deletedAt ? DateTime.formatIso(microphone.deletedAt) : null})
+        ON CONFLICT(id) DO UPDATE SET position = excluded.position, number = excluded.number,
+          color = excluded.color, name = excluded.name, updated_at = excluded.updated_at,
+          deleted_at = excluded.deleted_at`;
+    }
+    for (const [position, mix] of document.mixes.entries()) {
+      if (isDeepStrictEqual(previous?.mixes[position], mix)) continue;
       yield* sql`INSERT INTO mixes
         (id, show_id, position, number, color, name, created_at, updated_at, deleted_at)
         VALUES (${mix.id}, ${showId}, ${position}, ${mix.number}, ${mix.color}, ${mix.name ?? null},
           ${DateTime.formatIso(mix.createdAt)}, ${DateTime.formatIso(mix.updatedAt)},
-          ${mix.deletedAt ? DateTime.formatIso(mix.deletedAt) : null})`;
+          ${mix.deletedAt ? DateTime.formatIso(mix.deletedAt) : null})
+        ON CONFLICT(show_id, id) DO UPDATE SET position = excluded.position, number = excluded.number,
+          color = excluded.color, name = excluded.name, updated_at = excluded.updated_at,
+          deleted_at = excluded.deleted_at`;
+    }
+    const previousSongs = new Map(previous?.songs.map((song) => [song.id, song]));
     for (const [position, song] of document.songs.entries()) {
+      if (isDeepStrictEqual(previous?.songs[position], song)) continue;
+      const old = previousSongs.get(song.id);
       yield* sql`INSERT INTO songs
         (id, show_id, position, name, artist, notes, created_at, updated_at, deleted_at)
         VALUES (${song.id}, ${showId}, ${position}, ${song.name}, ${song.artist}, ${song.notes ?? null},
           ${DateTime.formatIso(song.createdAt)}, ${DateTime.formatIso(song.updatedAt)},
-          ${song.deletedAt ? DateTime.formatIso(song.deletedAt) : null})`;
-      for (const [assignmentPosition, assignment] of song.mixAssignments.entries()) {
-        yield* sql`INSERT INTO song_mix_assignments (song_id, show_id, mix_id, position)
+          ${song.deletedAt ? DateTime.formatIso(song.deletedAt) : null})
+        ON CONFLICT(id) DO UPDATE SET position = excluded.position, name = excluded.name,
+          artist = excluded.artist, notes = excluded.notes, updated_at = excluded.updated_at,
+          deleted_at = excluded.deleted_at`;
+      if (!isDeepStrictEqual(old?.mixAssignments, song.mixAssignments)) {
+        yield* sql`DELETE FROM song_mix_assignments WHERE song_id = ${song.id}`;
+        for (const [assignmentPosition, assignment] of song.mixAssignments.entries()) {
+          yield* sql`INSERT INTO song_mix_assignments (song_id, show_id, mix_id, position)
           VALUES (${song.id}, ${showId}, ${assignment.mixId}, ${assignmentPosition})`;
-        for (const [microphonePosition, microphoneId] of assignment.microphoneIds.entries())
-          yield* sql`INSERT INTO song_mix_assignment_microphones
+          for (const [microphonePosition, microphoneId] of assignment.microphoneIds.entries())
+            yield* sql`INSERT INTO song_mix_assignment_microphones
             (song_id, mix_id, microphone_id, position)
             VALUES (${song.id}, ${assignment.mixId}, ${microphoneId}, ${microphonePosition})`;
+        }
       }
-      for (const [namePosition, name] of (song.microphoneNames ?? []).entries())
-        yield* sql`INSERT INTO song_microphone_names (song_id, microphone_id, name, position)
+      if (!isDeepStrictEqual(old?.microphoneNames ?? [], song.microphoneNames ?? [])) {
+        yield* sql`DELETE FROM song_microphone_names WHERE song_id = ${song.id}`;
+        for (const [namePosition, name] of (song.microphoneNames ?? []).entries())
+          yield* sql`INSERT INTO song_microphone_names (song_id, microphone_id, name, position)
           VALUES (${song.id}, ${name.microphoneId}, ${name.name}, ${namePosition})`;
-      for (const [namePosition, name] of (song.mixNames ?? []).entries())
-        yield* sql`INSERT INTO song_mix_names (song_id, show_id, mix_id, name, position)
+      }
+      if (!isDeepStrictEqual(old?.mixNames ?? [], song.mixNames ?? [])) {
+        yield* sql`DELETE FROM song_mix_names WHERE song_id = ${song.id}`;
+        for (const [namePosition, name] of (song.mixNames ?? []).entries())
+          yield* sql`INSERT INTO song_mix_names (song_id, show_id, mix_id, name, position)
           VALUES (${song.id}, ${showId}, ${name.mixId}, ${name.name}, ${namePosition})`;
+      }
     }
   });
 
@@ -346,12 +388,9 @@ const make = Effect.fn("ShowRepository.make")(function* () {
             ...next,
             config: { ...next.config, id, updatedAt: yield* DateTime.now },
           };
-          yield* sql`DELETE FROM songs WHERE show_id = ${id}`;
-          yield* sql`DELETE FROM microphones WHERE show_id = ${id}`;
-          yield* sql`DELETE FROM mixes WHERE show_id = ${id}`;
           yield* sql`UPDATE shows SET name = ${refreshed.config.name}, color = ${refreshed.config.color},
           updated_at = ${DateTime.formatIso(refreshed.config.updatedAt)} WHERE id = ${id}`;
-          yield* insertChildren(refreshed);
+          yield* insertChildren(refreshed, current);
           return refreshed;
         }),
       )
