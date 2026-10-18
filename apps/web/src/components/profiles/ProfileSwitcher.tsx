@@ -1,5 +1,6 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Exit, Option } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import {
@@ -291,8 +292,8 @@ function ProfilesSettingsContent({
   readonly state: ProfilesState | undefined;
   readonly loadResult: AsyncResult.AsyncResult<ProfilesState, unknown>;
 }) {
-  const create = useAtomSet(profileAtoms.create, { mode: "promiseExit" });
-  const setDefault = useAtomSet(profileAtoms.setDefault, { mode: "promiseExit" });
+  const create = useRpcMutation(profileAtoms.create);
+  const setDefault = useRpcMutation(profileAtoms.setDefault);
   const { selected, select } = useSelectedProfile(state);
   const [error, setError] = React.useState<string>();
   const [newName, setNewName] = React.useState("");
@@ -451,8 +452,8 @@ function ProfileItem({
   readonly isDefault: boolean;
   readonly onError: (message: string | undefined) => void;
 }) {
-  const edit = useAtomSet(profileAtoms.edit, { mode: "promiseExit" });
-  const remove = useAtomSet(profileAtoms.delete, { mode: "promiseExit" });
+  const edit = useRpcMutation(profileAtoms.edit);
+  const remove = useRpcMutation(profileAtoms.delete);
   const [name, setName] = React.useState(profile.name as string);
   const [color, setColor] = React.useState<Color>(profile.color);
   const [busy, setBusy] = React.useState(false);

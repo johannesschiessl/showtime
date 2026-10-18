@@ -36,6 +36,7 @@ export * from "./rpc/errors.js";
 export * from "./rpc/LatestSnapshot.js";
 export * from "./rpc/Reactivity.js";
 export * from "./rpc/RpcClient.js";
+export * from "./rpc/Mutation.js";
 export * from "./rpc/StreamingRpcOptions.js";
 export * from "./shows/ShowAtoms.js";
 export * from "./songs/SongAtoms.js";

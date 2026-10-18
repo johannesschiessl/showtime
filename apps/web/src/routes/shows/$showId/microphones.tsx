@@ -1,6 +1,7 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Mic2Icon } from "lucide-react";
 import type { ShowId } from "@showtime/contracts";
 import {
@@ -29,8 +30,8 @@ function RouteComponent() {
   const typedShowId = showId as ShowId;
   const atoms = React.useMemo(() => microphoneAtoms(typedShowId), [typedShowId]);
   const result = useAtomValue(atoms.microphones);
-  const edit = useAtomSet(atoms.edit, { mode: "promiseExit" });
-  const deleteMicrophone = useAtomSet(atoms.delete, { mode: "promiseExit" });
+  const edit = useRpcMutation(atoms.edit);
+  const deleteMicrophone = useRpcMutation(atoms.delete);
 
   return (
     <NumberedResourceEditor

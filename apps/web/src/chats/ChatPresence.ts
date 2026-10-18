@@ -18,6 +18,7 @@ export const isChatVisibleAtBottom = (
   channelId: ChatChannelId,
   profileId: ProfileId,
 ) =>
+  document.visibilityState === "visible" &&
   current?.showId === showId &&
   current.channelId === channelId &&
   current.profileId === profileId &&

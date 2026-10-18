@@ -1,6 +1,7 @@
 import { NodeFileSystem } from "@effect/platform-node";
 import { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme } from "electron";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { isTrustedRendererUrl } from "./renderer-security.js";
 import path from "node:path";
 import { Effect, Schema } from "effect";
 import { ConnectionManager, LiveGuard, makeBackendRuntime } from "@showtime/backend";
@@ -56,12 +57,29 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, "public")
   : RENDERER_DIST;
 
+const rendererUrl =
+  VITE_DEV_SERVER_URL ?? pathToFileURL(path.join(RENDERER_DIST, "index.html")).href;
+const isOwnerEvent = (event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent) =>
+  Boolean(
+    win &&
+    !win.isDestroyed() &&
+    event.sender === win.webContents &&
+    event.senderFrame === win.webContents.mainFrame &&
+    isTrustedRendererUrl(event.senderFrame.url, rendererUrl),
+  );
+
+const handleOwner = (channel: string, listener: Parameters<typeof ipcMain.handle>[1]) =>
+  ipcMain.handle(channel, (event, ...args) => {
+    if (!isOwnerEvent(event)) throw new Error("Untrusted desktop IPC sender.");
+    return listener(event, ...args);
+  });
+
 let win: BrowserWindow | null;
 let backendStarted = false;
 let backendShutdownStarted = false;
 let appearancePreference: ShowtimeThemePreference = "system";
 let appearanceWrite = Promise.resolve();
-const rpcHost = "0.0.0.0";
+const rpcHost = "::";
 const rpcPort = showtimeLocalPort;
 const backendRuntime = makeBackendRuntime({
   host: rpcHost,
@@ -117,10 +135,18 @@ function createWindow() {
     },
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
     },
   });
 
   win.setMenu(null);
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-frame-navigate", (event) => {
+    if (!event.isMainFrame || !isTrustedRendererUrl(event.url, rendererUrl)) event.preventDefault();
+  });
+  win.webContents.on("will-attach-webview", (event) => event.preventDefault());
 
   if (VITE_DEV_SERVER_URL) {
     void win.loadURL(VITE_DEV_SERVER_URL);
@@ -209,15 +235,15 @@ if (gotSingleInstanceLock) {
     ])
       .then(([, storedAppearancePreference]) => {
         appearancePreference = storedAppearancePreference;
-        ipcMain.handle(desktopRpcWebSocketUrlChannel, () =>
+        handleOwner(desktopRpcWebSocketUrlChannel, () =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (connections) => connections.rpcWebSocketUrl),
           ),
         );
-        ipcMain.handle(desktopConnectionsStateChannel, () =>
+        handleOwner(desktopConnectionsStateChannel, () =>
           backendRuntime.runPromise(Effect.flatMap(ConnectionManager, (_) => _.connectionsState)),
         );
-        ipcMain.handle(
+        handleOwner(
           desktopCreateInvitationChannel,
           (
             _event,
@@ -231,30 +257,31 @@ if (gotSingleInstanceLock) {
               ),
             ),
         );
-        ipcMain.handle(desktopPairingInfoChannel, (_event, invitationId: string) =>
+        handleOwner(desktopPairingInfoChannel, (_event, invitationId: string) =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (_) => _.pairingInfo(invitationId)),
           ),
         );
-        ipcMain.handle(desktopRemoveConnectionChannel, (_event, id: string) =>
+        handleOwner(desktopRemoveConnectionChannel, (_event, id: string) =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (_) => _.removeConnection(id)),
           ),
         );
-        ipcMain.handle(desktopSetConnectionsEnabledChannel, (_event, enabled: boolean) =>
+        handleOwner(desktopSetConnectionsEnabledChannel, (_event, enabled: boolean) =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (_) => _.setConnectionsEnabled(enabled)),
           ),
         );
-        ipcMain.handle(desktopSetHostNameChannel, (_event, hostName: unknown) =>
+        handleOwner(desktopSetHostNameChannel, (_event, hostName: unknown) =>
           backendRuntime.runPromise(
             Effect.flatMap(ConnectionManager, (_) =>
               _.setHostName(Schema.decodeUnknownSync(ShowtimeHostName)(hostName)),
             ),
           ),
         );
-        ipcMain.handle(desktopUpdateStateChannel, () => updateService.state());
+        handleOwner(desktopUpdateStateChannel, () => updateService.state());
         ipcMain.on(desktopSetAppearanceChannel, (event, nextPreference: unknown) => {
+          if (!isOwnerEvent(event)) return;
           if (!isShowtimeThemePreference(nextPreference)) return;
           const preferenceChanged = nextPreference !== appearancePreference;
           appearancePreference = nextPreference;
@@ -278,9 +305,9 @@ if (gotSingleInstanceLock) {
               });
           }
         });
-        ipcMain.handle(desktopCheckForUpdatesChannel, () => updateService.check());
-        ipcMain.handle(desktopDownloadUpdateChannel, () => updateService.download());
-        ipcMain.handle(desktopInstallUpdateChannel, () => updateService.install());
+        handleOwner(desktopCheckForUpdatesChannel, () => updateService.check());
+        handleOwner(desktopDownloadUpdateChannel, () => updateService.download());
+        handleOwner(desktopInstallUpdateChannel, () => updateService.install());
         backendStarted = true;
         createWindow();
         void updateService.check();

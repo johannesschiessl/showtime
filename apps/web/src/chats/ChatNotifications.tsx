@@ -1,3 +1,4 @@
+import { asyncResultValueOrElse } from "@/client";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { DateTime } from "effect";
@@ -55,9 +56,9 @@ const writeCursor = (key: string, cursor: Cursor) => {
 export function ChatNotificationCoordinator() {
   const profilesResult = useAtomValue(profileAtoms.state);
   const showsResult = useAtomValue(showsAtom);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
-  const shows = AsyncResult.isSuccess(showsResult) ? showsResult.value : [];
+  const shows = asyncResultValueOrElse(showsResult, () => []);
   if (!selected) return null;
   return shows.map((show) => (
     <ShowChatNotifications

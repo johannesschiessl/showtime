@@ -9,14 +9,15 @@ import {
   type SongId,
   type SongName,
 } from "@showtime/contracts";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import { rpcErrorMessageFromCause, songAtoms, songsRpcReactivityKey } from "@/client";
 import { createdSongHandoff } from "./CreatedSongHandoff";
 
 export function useCreateSong(showId: ShowId, insertAfterSongId?: SongId) {
   const navigate = useNavigate();
   const songsSnapshot = useAtomValue(songAtoms(showId).syncedSongs);
-  const create = useAtomSet(songAtoms(showId).create, { mode: "promiseExit" });
+  const create = useRpcMutation(songAtoms(showId).create);
   const [isCreating, setIsCreating] = React.useState(false);
   const [error, setError] = React.useState<string>();
 

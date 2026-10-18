@@ -1,3 +1,4 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -48,12 +49,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { cn } from "@/lib/utils";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { mixAtoms, type MixListItem } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
 import { asyncResultValueOrElse, rpcErrorMessageFromCause } from "@/client";
 import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
+import { mergeRemoteDraft } from "@/lib/draft";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,
@@ -134,6 +136,7 @@ function RouteComponent() {
 
   return (
     <SongDetail
+      key={`${typedShowId}:${song.id}`}
       showId={typedShowId}
       song={song}
       number={songNumber}
@@ -156,7 +159,7 @@ function SongDetail({
   readonly mixes: ReadonlyArray<MixListItem>;
   readonly microphones: ReadonlyArray<Microphone>;
 }) {
-  const edit = useAtomSet(songAtoms(showId).edit, { mode: "promiseExit" });
+  const edit = useRpcMutation(songAtoms(showId).edit);
   const [name, setName] = React.useState(song.name as string);
   const [artist, setArtist] = React.useState(song.artist as string);
   const [notes, setNotes] = React.useState(song.notes ?? "");
@@ -169,8 +172,6 @@ function SongDetail({
   const [mixNames, setMixNames] = React.useState<ReadonlyArray<SongMixName>>(song.mixNames ?? []);
   const [isSaving, setIsSaving] = React.useState(false);
   const isSavingRef = React.useRef(false);
-  const queuedSaveCountRef = React.useRef(0);
-  const preserveDraftRef = React.useRef(false);
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const draftRef = React.useRef({
     name: song.name as string,
@@ -181,6 +182,7 @@ function SongDetail({
     mixNames: song.mixNames ?? [],
   });
   const [saveError, setSaveError] = React.useState<string>();
+  const previousRemote = React.useRef(draftRef.current);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
   const orderedMixes = [...mixes].sort(
@@ -189,8 +191,7 @@ function SongDetail({
   const hasUnpairedMix = orderedMixes.filter((mix) => mix.id !== mainMixId).length % 2 === 1;
 
   React.useEffect(() => {
-    if (queuedSaveCountRef.current > 0 || preserveDraftRef.current) return;
-    draftRef.current = {
+    const incoming = {
       name: song.name,
       artist: song.artist,
       notes: song.notes ?? "",
@@ -198,12 +199,15 @@ function SongDetail({
       microphoneNames: song.microphoneNames ?? [],
       mixNames: song.mixNames ?? [],
     };
-    setName(song.name);
-    setArtist(song.artist);
-    setNotes(song.notes ?? "");
-    setAssignments(song.mixAssignments);
-    setMicrophoneNames(song.microphoneNames ?? []);
-    setMixNames(song.mixNames ?? []);
+    const merged = mergeRemoteDraft(draftRef.current, previousRemote.current, incoming);
+    previousRemote.current = incoming;
+    draftRef.current = merged;
+    setName(merged.name);
+    setArtist(merged.artist);
+    setNotes(merged.notes);
+    setAssignments(merged.assignments);
+    setMicrophoneNames(merged.microphoneNames);
+    setMixNames(merged.mixNames);
   }, [song]);
 
   React.useLayoutEffect(() => {
@@ -257,7 +261,6 @@ function SongDetail({
       mixNames: normalizedMixNames,
     };
     draftRef.current = normalizedDraft;
-    queuedSaveCountRef.current += 1;
 
     const run = async () => {
       if (blockUi) {
@@ -283,11 +286,9 @@ function SongDetail({
         setIsSaving(false);
       }
       if (Exit.isFailure(result)) {
-        preserveDraftRef.current = true;
         setSaveError(rpcErrorMessageFromCause(result.cause));
         return false;
       }
-      preserveDraftRef.current = false;
       return true;
     };
 
@@ -296,9 +297,7 @@ function SongDetail({
       () => undefined,
       () => undefined,
     );
-    return result.finally(() => {
-      queuedSaveCountRef.current -= 1;
-    });
+    return result;
   };
 
   const toggleMicrophone = (mixId: Mix["id"], microphoneId: MicrophoneId) => {
@@ -675,7 +674,7 @@ function SongDeleteDialog({
   readonly onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
-  const deleteSong = useAtomSet(songAtoms(showId).delete, { mode: "promiseExit" });
+  const deleteSong = useRpcMutation(songAtoms(showId).delete);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [error, setError] = React.useState<string>();
   React.useEffect(() => {

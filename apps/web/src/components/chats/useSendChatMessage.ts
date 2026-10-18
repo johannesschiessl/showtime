@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useAtomSet } from "@effect/atom-react";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import { Exit } from "effect";
 import {
   chatsSyncKey,
@@ -16,7 +16,7 @@ import {
 import { chatAtoms, rpcErrorMessageFromCause } from "@/client";
 
 export function useSendChatMessage(showId: ShowId, profileId: ProfileId, channelId: ChatChannelId) {
-  const send = useAtomSet(chatAtoms(showId, profileId).send, { mode: "promiseExit" });
+  const send = useRpcMutation(chatAtoms(showId, profileId).send);
   const [sending, setSending] = React.useState(false);
   const [error, setError] = React.useState<string>();
   const sendingRef = React.useRef(false);

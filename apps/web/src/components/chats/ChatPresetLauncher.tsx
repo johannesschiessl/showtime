@@ -1,6 +1,6 @@
+import { asyncResultValueOrElse } from "@/client";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
 import type { ChatChannelId, ProfileId, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
 import { ChatPresetDialog } from "@/components/chats/ChatPresetDialog";
@@ -20,7 +20,7 @@ type ChatPresetLauncherProps = {
 
 export function ChatPresetLauncher(props: ChatPresetLauncherProps) {
   const profilesResult = useAtomValue(profileAtoms.state);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
 
   return selected ? (
@@ -37,7 +37,7 @@ function ProfileChatPresetLauncher({
   trigger,
 }: ChatPresetLauncherProps & { readonly profileId: ProfileId }) {
   const result = useAtomValue(chatAtoms(showId, profileId).state);
-  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const snapshot = asyncResultValueOrElse(result, () => undefined);
   const channel = snapshot?.channels.find((item) => item.id === channelId) ?? snapshot?.channels[0];
 
   return snapshot && channel ? (

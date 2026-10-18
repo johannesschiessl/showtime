@@ -52,7 +52,7 @@ export function ConnectionLinkDialog({
     setMessage(undefined);
     navigator.vibrate?.(40);
 
-    if (standalone) {
+    if (standalone || new URL(pairingUrl).origin === window.location.origin) {
       const target = new URL(pairingUrl);
       const result = await capturePairingFragment({
         hash: target.hash,

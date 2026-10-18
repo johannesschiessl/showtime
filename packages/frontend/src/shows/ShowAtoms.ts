@@ -1,3 +1,4 @@
+import { optimisticMutation } from "../rpc/Mutation.js";
 import { Atom, AsyncResult } from "effect/reactivity";
 import {
   compareShowSummaries,
@@ -46,7 +47,7 @@ export const makeShowAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
   type MutationInput<T> = T extends Atom.AtomResultFn<infer Arg, infer _A, infer _E> ? Arg : never;
 
   const createShowAtom = showsAtom.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof createShowMutation>) => {
         if (!AsyncResult.isSuccess(current)) {
           return current;
@@ -72,7 +73,7 @@ export const makeShowAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
   );
 
   const editShowAtom = showsAtom.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof editShowMutation>) => {
         if (!AsyncResult.isSuccess(current)) {
           return current;
@@ -98,7 +99,7 @@ export const makeShowAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
   );
 
   const deleteShowAtom = showsAtom.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof deleteShowMutation>) => {
         if (!AsyncResult.isSuccess(current)) {
           return current;
@@ -117,6 +118,7 @@ export const makeShowAtoms = (RpcClient: ShowtimeRpcClient, options?: StreamingR
   const showMutationAtoms = [createShowAtom, editShowAtom, deleteShowAtom] as const;
 
   return {
+    confirmedShowsAtom: showsQueryAtom,
     showDialogAtom,
     showsAtom,
     createShowAtom,

@@ -1,3 +1,4 @@
+import { optimisticMutation } from "../rpc/Mutation.js";
 import { DateTime } from "effect";
 import { Atom, AsyncResult } from "effect/reactivity";
 import {
@@ -25,7 +26,7 @@ export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient, options?: Streami
   const setDefaultMutation = RpcClient.mutation("profiles.setDefault");
 
   const create = state.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof createMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
         const now = DateTime.nowUnsafe();
@@ -47,7 +48,7 @@ export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient, options?: Streami
   );
 
   const edit = state.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof editMutation>) => {
         if (!AsyncResult.isSuccess(current)) return current;
         const updatedAt = DateTime.nowUnsafe();
@@ -70,7 +71,7 @@ export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient, options?: Streami
   );
 
   const deleteProfile = state.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof deleteMutation>) =>
         AsyncResult.isSuccess(current)
           ? AsyncResult.success({
@@ -83,7 +84,7 @@ export const makeProfileAtoms = (RpcClient: ShowtimeRpcClient, options?: Streami
   );
 
   const setDefault = state.pipe(
-    Atom.optimisticFn({
+    optimisticMutation({
       reducer: (current, input: MutationInput<typeof setDefaultMutation>) =>
         AsyncResult.isSuccess(current)
           ? AsyncResult.success({ ...current.value, defaultProfileId: input.payload.id })

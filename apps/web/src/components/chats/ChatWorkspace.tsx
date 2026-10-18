@@ -1,5 +1,7 @@
+import { asyncResultValueOrElse } from "@/client";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { DateTime, Exit } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { MessageScroller, useMessageScrollerScrollable } from "@shadcn/react/message-scroller";
@@ -81,6 +83,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { useSelectedProfile } from "@/profiles";
 import { ShowTitleBarPortal } from "@/components/shows/ShowTitleBarPortal";
+import { useDocumentVisible } from "@/hooks/useDocumentVisible";
 
 export function ChatWorkspace({
   showId,
@@ -96,7 +99,7 @@ export function ChatWorkspace({
   readonly onSelectedChannelChange?: (channelId: ChatChannelId) => void;
 }) {
   const profilesResult = useAtomValue(profileAtoms.state);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
 
   if (!selected || !profileState) {
@@ -143,7 +146,7 @@ function ProfileChatWorkspace({
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId | undefined>(
     requestedChannelId,
   );
-  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const snapshot = asyncResultValueOrElse(result, () => undefined);
   const selectedChannel =
     snapshot?.channels.find((channel) => channel.id === selectedChannelId) ?? snapshot?.channels[0];
   const selectChannel = React.useCallback(
@@ -217,10 +220,10 @@ function ChannelTabs({
   readonly inTitleBar: boolean;
 }) {
   const atoms = chatAtoms(showId, profileId);
-  const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
-  const renameChannel = useAtomSet(atoms.renameChannel, { mode: "promiseExit" });
-  const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
-  const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
+  const createChannel = useRpcMutation(atoms.createChannel);
+  const renameChannel = useRpcMutation(atoms.renameChannel);
+  const deleteChannel = useRpcMutation(atoms.deleteChannel);
+  const setNotifications = useRpcMutation(atoms.setNotifications);
   const [renameTarget, setRenameTarget] = React.useState<
     Pick<ChatChannel, "id" | "name"> | undefined
   >();
@@ -647,24 +650,31 @@ function ReadTracker({
   readonly active: boolean;
 }) {
   const { end: canScrollToEnd } = useMessageScrollerScrollable();
-  const markRead = useAtomSet(chatAtoms(showId, profileId).markRead, { mode: "promiseExit" });
+  const markRead = useRpcMutation(chatAtoms(showId, profileId).markRead);
   const atBottom = !canScrollToEnd;
+  const visible = useDocumentVisible();
   const lastMarked = React.useRef(channel.lastReadSequence);
 
   React.useEffect(() => {
-    setChatPresence(active ? { showId, channelId: channel.id, profileId, atBottom } : undefined);
+    setChatPresence(
+      active && visible ? { showId, channelId: channel.id, profileId, atBottom } : undefined,
+    );
     return () => setChatPresence(undefined);
-  }, [active, atBottom, channel.id, profileId, showId]);
+  }, [active, visible, atBottom, channel.id, profileId, showId]);
 
   React.useEffect(() => {
-    if (!active || !atBottom || channel.newestSequence <= lastMarked.current) return;
+    if (!active || !visible || !atBottom || channel.newestSequence <= lastMarked.current) return;
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     let cancelRetryWait: (() => void) | undefined;
 
     const markNewestRead = async () => {
       let retryDelay = 250;
-      while (!cancelled && channel.newestSequence > lastMarked.current) {
+      while (
+        !cancelled &&
+        document.visibilityState === "visible" &&
+        channel.newestSequence > lastMarked.current
+      ) {
         const exit = await markRead({
           payload: {
             showId,
@@ -697,7 +707,7 @@ function ReadTracker({
       if (retryTimer !== undefined) clearTimeout(retryTimer);
       cancelRetryWait?.();
     };
-  }, [active, atBottom, channel.id, channel.newestSequence, markRead, profileId, showId]);
+  }, [active, visible, atBottom, channel.id, channel.newestSequence, markRead, profileId, showId]);
   return null;
 }
 

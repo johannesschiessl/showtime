@@ -19,6 +19,8 @@ import { ProfileService } from "../profiles/ProfileService.js";
 import { ChatService } from "../chats/ChatService.js";
 import { LiveGuard } from "../live/LiveGuard.js";
 
+const resourceMutationKeys = (keys: ReadonlyArray<unknown>) => [...showsSyncKey, ...keys];
+
 const handlers = ShowtimeRpcs.toLayer(
   Effect.gen(function* () {
     const shows = yield* ShowService;
@@ -47,7 +49,7 @@ const handlers = ShowtimeRpcs.toLayer(
             ...songsSyncKey(id),
             ...chatsSyncKey(id),
           ],
-          shows.delete(id).pipe(Effect.andThen(chats.deleteShow(id))),
+          shows.delete(id),
         ),
       "profiles.list": () => sync.query(profilesSyncKey, profiles.list),
       "profiles.create": ({ name, color }) =>
@@ -59,7 +61,7 @@ const handlers = ShowtimeRpcs.toLayer(
       "chats.state": ({ showId, profileId }) =>
         sync.query(
           chatsSyncKey(showId),
-          showRepository.findById(showId).pipe(Effect.andThen(chats.state(showId, profileId))),
+          showRepository.ensureExists(showId).pipe(Effect.andThen(chats.state(showId, profileId))),
         ),
       "chats.createChannel": ({ showId, name }) =>
         sync.mutation(chatsSyncKey(showId), chats.createChannel({ showId, name })),
@@ -128,10 +130,13 @@ const handlers = ShowtimeRpcs.toLayer(
       "microphones.list": ({ showId }) =>
         sync.query(microphonesSyncKey(showId), microphones.list(showId)),
       "microphones.create": ({ showId, color }) =>
-        sync.mutation(microphonesSyncKey(showId), microphones.create({ showId, color })),
+        sync.mutation(
+          resourceMutationKeys(microphonesSyncKey(showId)),
+          microphones.create({ showId, color }),
+        ),
       "microphones.edit": ({ showId, id, number, color, name }) =>
         sync.mutation(
-          microphonesSyncKey(showId),
+          resourceMutationKeys(microphonesSyncKey(showId)),
           microphones.edit({
             showId,
             id,
@@ -141,21 +146,27 @@ const handlers = ShowtimeRpcs.toLayer(
           }),
         ),
       "microphones.delete": ({ showId, id }) =>
-        sync.mutation(microphonesSyncKey(showId), microphones.delete({ showId, id })),
+        sync.mutation(
+          resourceMutationKeys(microphonesSyncKey(showId)),
+          microphones.delete({ showId, id }),
+        ),
       "mixes.list": ({ showId }) => sync.query(mixesSyncKey(showId), mixes.list(showId)),
       "mixes.create": ({ showId, color }) =>
-        sync.mutation(mixesSyncKey(showId), mixes.create({ showId, color })),
+        sync.mutation(resourceMutationKeys(mixesSyncKey(showId)), mixes.create({ showId, color })),
       "mixes.edit": ({ showId, id, number, color, name }) =>
         sync.mutation(
-          mixesSyncKey(showId),
+          resourceMutationKeys(mixesSyncKey(showId)),
           mixes.edit({ showId, id, number, color, ...(name === undefined ? {} : { name }) }),
         ),
       "mixes.delete": ({ showId, id }) =>
-        sync.mutation(mixesSyncKey(showId), mixes.delete({ showId, id })),
+        sync.mutation(
+          resourceMutationKeys([...mixesSyncKey(showId), ...songsSyncKey(showId)]),
+          mixes.delete({ showId, id }),
+        ),
       "songs.list": ({ showId }) => sync.query(songsSyncKey(showId), songs.list(showId)),
       "songs.create": ({ showId, id, name, artist, insertAfterSongId }) =>
         sync.mutation(
-          songsSyncKey(showId),
+          resourceMutationKeys(songsSyncKey(showId)),
           songs.create({ showId, id, name, artist, insertAfterSongId }),
         ),
       "songs.edit": ({
@@ -169,7 +180,7 @@ const handlers = ShowtimeRpcs.toLayer(
         mixNames,
       }) =>
         sync.mutation(
-          songsSyncKey(showId),
+          resourceMutationKeys(songsSyncKey(showId)),
           songs.edit({
             showId,
             id,
@@ -182,9 +193,12 @@ const handlers = ShowtimeRpcs.toLayer(
           }),
         ),
       "songs.reorder": ({ showId, orderedSongIds }) =>
-        sync.mutation(songsSyncKey(showId), songs.reorder({ showId, orderedSongIds })),
+        sync.mutation(
+          resourceMutationKeys(songsSyncKey(showId)),
+          songs.reorder({ showId, orderedSongIds }),
+        ),
       "songs.delete": ({ showId, id }) =>
-        sync.mutation(songsSyncKey(showId), songs.delete({ showId, id })),
+        sync.mutation(resourceMutationKeys(songsSyncKey(showId)), songs.delete({ showId, id })),
     });
   }),
 );

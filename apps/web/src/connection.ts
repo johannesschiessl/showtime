@@ -13,20 +13,24 @@ import { Schema } from "effect";
 
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
+export const hasPairingFragment = (hash: string) => hash.startsWith(fragmentPrefix);
+const pairingTokenFromFragment = (hash: string) => {
+  if (!hasPairingFragment(hash)) return undefined;
+  const token = new URLSearchParams(hash.slice(1)).get("pair") ?? "";
+  return pairingTokenPattern.test(token) ? token : undefined;
+};
 const connectionRequestTimeoutMs = 5_000;
 
-const requestWithTimeout = async (
-  request: typeof fetch,
-  input: RequestInfo | URL,
-  init: RequestInit,
+const withRequestTimeout = async <A>(
+  exchange: (signal: AbortSignal) => Promise<A>,
   timeoutMs: number,
   timeoutMessage: string,
-): Promise<Response> => {
+): Promise<A> => {
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      request(input, { ...init, signal: controller.signal }),
+      exchange(controller.signal),
       new Promise<never>((_, reject) => {
         timeout = setTimeout(() => {
           controller.abort();
@@ -38,6 +42,14 @@ const requestWithTimeout = async (
     if (timeout !== undefined) clearTimeout(timeout);
   }
 };
+
+const requestWithTimeout = (
+  request: typeof fetch,
+  input: RequestInfo | URL,
+  init: RequestInit,
+  timeoutMs: number,
+  timeoutMessage: string,
+) => withRequestTimeout((signal) => request(input, { ...init, signal }), timeoutMs, timeoutMessage);
 
 const decodeStoredConnection = Schema.decodeUnknownSync(ShowtimeStoredConnection, {
   onExcessProperty: "error",
@@ -64,8 +76,7 @@ export const parseShowtimePairingUrl = (value: string, baseUrl = window.location
     const url = new URL(value, baseUrl);
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
     if (url.username || url.password) return undefined;
-    if (!url.hash.startsWith(fragmentPrefix)) return undefined;
-    if (!pairingTokenPattern.test(url.hash.slice(fragmentPrefix.length))) return undefined;
+    if (!pairingTokenFromFragment(url.hash)) return undefined;
     return url.href;
   } catch {
     return undefined;
@@ -116,13 +127,13 @@ export const capturePairingFragment = async (
   storage: WritableStorage | undefined = browserLocalStorage(),
   history: Pick<History, "replaceState"> = window.history,
   request: typeof fetch = fetch,
+  timeoutMs = connectionRequestTimeoutMs,
 ): Promise<PairingResult> => {
-  if (!location.hash.startsWith(fragmentPrefix)) return { status: "none" };
-  const pairingParameters = new URLSearchParams(location.hash.slice(1));
-  const token = pairingParameters.get("pair") ?? "";
+  if (!hasPairingFragment(location.hash)) return { status: "none" };
+  const token = pairingTokenFromFragment(location.hash);
   const removePairingFragment = () =>
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);
-  if (!pairingTokenPattern.test(token)) {
+  if (!token) {
     removePairingFragment();
     return { status: "failed", message: "This connection link is invalid." };
   }
@@ -178,8 +189,24 @@ export const capturePairingFragment = async (
   };
 
   let response: Response;
+  let parsed: unknown;
   try {
-    response = await request(`/pair/${token}`, { method: "POST" });
+    response = await withRequestTimeout(
+      async (signal) => {
+        const response = await request(`/pair/${token}`, { method: "POST", signal });
+        if (response.ok) {
+          try {
+            parsed = await response.json();
+          } catch {
+            // A successful exchange consumed the invitation, even if its body is invalid.
+            // Let credential validation report the invalid details and remove the fragment.
+          }
+        }
+        return response;
+      },
+      timeoutMs,
+      "Pairing timed out",
+    );
   } catch {
     releaseReservation();
     return {
@@ -199,14 +226,6 @@ export const capturePairingFragment = async (
     };
   }
 
-  let parsed: unknown;
-  try {
-    parsed = await response.json();
-  } catch {
-    releaseReservation();
-    removePairingFragment();
-    return { status: "failed", message: "Showtime returned invalid connection details." };
-  }
   let credentials: ShowtimeStoredConnection;
   try {
     credentials = decodeStoredConnection(parsed);

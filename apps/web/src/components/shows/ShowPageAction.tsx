@@ -1,4 +1,4 @@
-import { useAtomSet } from "@effect/atom-react";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import type { ShowId } from "@showtime/contracts";
 import { PlusIcon } from "lucide-react";
 import {
@@ -18,8 +18,8 @@ export function ShowPageAction({
   readonly showId: ShowId;
   readonly pathname: string;
 }) {
-  const createMicrophone = useAtomSet(microphoneAtoms(showId).create);
-  const createMix = useAtomSet(mixAtoms(showId).create);
+  const createMicrophone = useRpcMutation(microphoneAtoms(showId).create);
+  const createMix = useRpcMutation(mixAtoms(showId).create);
   const songCreator = useCreateSong(showId);
 
   if (pathname.endsWith("/microphones")) {

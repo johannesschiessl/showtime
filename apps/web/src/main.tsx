@@ -5,7 +5,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { RegistryProvider as AtomProvider } from "@effect/atom-react";
 import { router } from "./router";
 import "./styles.css";
-import { capturePairingFragment, probeStoredConnection, readStoredConnection } from "./connection";
+import {
+  capturePairingFragment,
+  hasPairingFragment,
+  probeStoredConnection,
+  readStoredConnection,
+} from "./connection";
 import { connectionState, type ConnectionStatus, useConnectionSnapshot } from "./connection-state";
 import { ConnectionOverlay } from "./components/connections/ConnectionOverlay";
 import { isDesktopHost } from "./platform";
@@ -17,7 +22,7 @@ import { NotificationProvider } from "./notifications/NotificationProvider";
 import { ChatNotificationCoordinator } from "./chats/ChatNotifications";
 import { installMobileViewport } from "./mobile-viewport";
 import { registerServiceWorker, restorePwaConnectionHandoff } from "./pwa";
-import { ConnectToShowtime } from "./components/connections/ConnectToShowtime";
+import { PairingStartup } from "./components/connections/PairingStartup";
 import { initializeTheme } from "./theme";
 
 const uninstallTheme = initializeTheme();
@@ -28,14 +33,14 @@ if (import.meta.hot) {
 }
 restorePwaConnectionHandoff();
 void registerServiceWorker();
-const pairing = await capturePairingFragment();
+const pairingRequest = hasPairingFragment(window.location.hash)
+  ? capturePairingFragment()
+  : undefined;
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    {pairing.status === "failed" ? (
-      <ConnectToShowtime error={pairing.message} />
-    ) : (
+    <PairingStartup request={pairingRequest}>
       <SynchronizedApp />
-    )}
+    </PairingStartup>
   </React.StrictMode>,
 );
 

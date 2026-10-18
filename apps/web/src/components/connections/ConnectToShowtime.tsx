@@ -11,7 +11,13 @@ import {
 } from "@/components/ui/empty";
 import { ConnectionLinkDialog } from "./ConnectionLinkDialog";
 
-export function ConnectToShowtime({ error }: { readonly error?: string }) {
+export function ConnectToShowtime({
+  error,
+  pending = false,
+}: {
+  readonly error?: string;
+  readonly pending?: boolean;
+}) {
   const [connectOpen, setConnectOpen] = React.useState(false);
 
   return (
@@ -21,10 +27,18 @@ export function ConnectToShowtime({ error }: { readonly error?: string }) {
           <EmptyMedia variant="icon">
             <RadioTowerIcon />
           </EmptyMedia>
-          <EmptyTitle>{error ? "Could not connect to Showtime" : "Connect to Showtime"}</EmptyTitle>
+          <EmptyTitle>
+            {pending
+              ? "Connecting to Showtime…"
+              : error
+                ? "Could not connect to Showtime"
+                : "Connect to Showtime"}
+          </EmptyTitle>
           <EmptyDescription>
-            {error ??
-              "On the show computer, add this device under Connections. Then copy and open its connection link on this device."}
+            {pending
+              ? "Saving this device's connection. This may take a few seconds."
+              : (error ??
+                "On the show computer, add this device under Connections. Then copy and open its connection link on this device.")}
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
@@ -32,8 +46,8 @@ export function ConnectToShowtime({ error }: { readonly error?: string }) {
             <LinkIcon /> Paste connection link
           </Button>
           <p className="max-w-sm text-xs text-muted-foreground">
-            Keep both devices on the same local network. Connection links can also be sent through
-            WhatsApp or another messaging app.
+            Keep both devices on a trusted private network. HTTP connections send credentials and
+            show data without encryption. Share connection links only with the show team.
           </p>
         </EmptyContent>
       </Empty>

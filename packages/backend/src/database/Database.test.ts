@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLOutputValue } from "node:sqlite";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -254,6 +254,61 @@ if (concurrencyWorkerHome && concurrencyWorkerBarrier && concurrencyWorkerId) {
 }
 
 describe("Showtime database", () => {
+  it("deletes shows with reply chains beyond SQLite's cascade recursion limit", async () => {
+    const home = await makeHome();
+    await runDatabase(
+      home,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO shows VALUES ('show', 'Show', 'sky', 'now', 'now')`;
+        yield* sql`INSERT INTO chat_channels VALUES ('channel', 'show', 'General', 'now')`;
+        yield* sql`WITH RECURSIVE chain(n) AS (VALUES(1) UNION ALL SELECT n + 1 FROM chain WHERE n < 1100)
+        INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, reply_to_message_id, sent_at)
+        SELECT 'message' || n, 'show', 'channel', 'sender', 'Reply', CASE WHEN n = 1 THEN NULL ELSE 'message' || (n - 1) END, 'now' FROM chain`;
+        yield* sql`DELETE FROM shows WHERE id = 'show'`;
+        expect(yield* sql`SELECT * FROM chat_messages`).toEqual([]);
+        expect(yield* sql`PRAGMA foreign_key_check`).toEqual([]);
+      }),
+    );
+  });
+  it("upgrades the initial ledger without resetting existing data", async () => {
+    const home = await makeHome();
+    await runDatabase(home, Effect.void);
+    const db = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
+    let profile: Record<string, SQLOutputValue> | undefined;
+    try {
+      db.exec(`DROP TRIGGER show_detach_chat_replies; DROP TRIGGER channel_detach_chat_replies;
+      DROP TRIGGER chat_message_insert_counts;
+      DROP TRIGGER chat_message_delete_counts;
+      ALTER TABLE chat_messages DROP COLUMN channel_position;
+      DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;
+      DELETE FROM effect_sql_migrations WHERE migration_id >= 2;`);
+      db.exec(`INSERT INTO shows VALUES ('show', 'Show', 'blue', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO chat_channels VALUES ('channel', 'show', 'General', '2026-01-01T00:00:00.000Z');
+      INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, sent_at)
+        VALUES ('message', 'show', 'channel', 'sender', 'Existing message', '2026-01-01T00:00:00.000Z');`);
+      profile = db.prepare("SELECT id FROM profiles").get();
+    } finally {
+      db.close();
+    }
+    await runDatabase(home, Effect.void);
+    const upgraded = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
+    try {
+      expect(upgraded.prepare("SELECT id FROM profiles").get()).toEqual(profile);
+      expect(upgraded.prepare("SELECT body, channel_position FROM chat_messages").get()).toEqual({
+        body: "Existing message",
+        channel_position: 1,
+      });
+      expect(upgraded.prepare("SELECT message_count FROM chat_channel_counts").get()).toEqual({
+        message_count: 1,
+      });
+      expect(upgraded.prepare("SELECT COUNT(*) AS count FROM effect_sql_migrations").get()).toEqual(
+        { count: currentMigrations.length },
+      );
+    } finally {
+      upgraded.close();
+    }
+  });
   it("creates migration 1, bootstrap state, safety pragmas, and a consistent backup", async () => {
     const home = await makeHome();
     const backupPath = path.join(home, "backup.db");
@@ -412,16 +467,45 @@ describe("Showtime database", () => {
     concurrencyTestTimeout,
   );
 
-  it("reclaims an initialization lock left by a terminated process", async () => {
+  it("releases initialization ownership when a process terminates", async () => {
     const home = await makeHome();
     const directory = path.join(home, ".showtime");
-    const lockPath = path.join(directory, `${databaseFileName}.initialize.lock`);
+    const lockPath = path.join(directory, `${databaseFileName}.initialize.db`);
     await mkdir(directory);
-    await writeFile(lockPath, JSON.stringify({ pid: 2_147_483_647, token: "stale-owner" }));
+    const holder = spawn(
+      process.execPath,
+      [
+        "-e",
+        `
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(process.argv[1]);
+      db.exec('BEGIN IMMEDIATE');
+      process.stdout.write('locked');
+      setInterval(() => {}, 1000);
+    `,
+        lockPath,
+      ],
+      { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const stopped = new Promise<void>((resolve) => holder.once("exit", () => resolve()));
+    try {
+      await waitFor(
+        new Promise<void>((resolve, reject) => {
+          holder.stdout.once("data", () => resolve());
+          holder.once("error", reject);
+          holder.once("exit", () => reject(new Error("Lock holder exited before acquisition")));
+        }),
+        5_000,
+        "Lock holder did not acquire the initialization lock",
+      );
+    } finally {
+      holder.kill();
+      await stopped;
+    }
 
     await runDatabase(home, Effect.void);
 
-    await expect(stat(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(lockPath)).resolves.toBeDefined();
     const verified = new DatabaseSync(path.join(directory, databaseFileName), { readOnly: true });
     try {
       expect(

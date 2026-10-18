@@ -1,6 +1,7 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { SpeakerIcon } from "lucide-react";
 import { mainMixId, type ShowId } from "@showtime/contracts";
 import {
@@ -26,8 +27,8 @@ function RouteComponent() {
   const typedShowId = showId as ShowId;
   const atoms = React.useMemo(() => mixAtoms(typedShowId), [typedShowId]);
   const result = useAtomValue(atoms.mixes);
-  const edit = useAtomSet(atoms.edit, { mode: "promiseExit" });
-  const deleteMix = useAtomSet(atoms.delete, { mode: "promiseExit" });
+  const edit = useRpcMutation(atoms.edit);
+  const deleteMix = useRpcMutation(atoms.delete);
 
   return (
     <NumberedResourceEditor

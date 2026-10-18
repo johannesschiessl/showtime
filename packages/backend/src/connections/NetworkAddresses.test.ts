@@ -11,7 +11,54 @@ const address = (value: string) => ({
   mac: "00:00:00:00:00:00",
 });
 
+const ipv6 = (value: string, scopeid = 0) => ({
+  address: value,
+  family: "IPv6" as const,
+  internal: false,
+  netmask: "ffff:ffff:ffff:ffff::",
+  cidr: `${value}/64`,
+  mac: "00:00:00:00:00:00",
+  scopeid,
+});
+
 describe("discoverCandidates", () => {
+  it("includes DHCP-free IPv4 and ULA IPv6 without offering scoped IPv6 URLs", () => {
+    const candidates = discoverCandidates(
+      {
+        ethernet: [
+          address("169.254.10.2"),
+          ipv6("fd00::2"),
+          ipv6("2001:db8::2"),
+          ipv6("fe80::2", 3),
+        ],
+      },
+      8585,
+      "token",
+    );
+    expect(candidates.map((candidate) => candidate.url)).toEqual([
+      "http://169.254.10.2:8585/#pair=token",
+      "http://[fd00::2]:8585/#pair=token",
+      "http://[2001:db8::2]:8585/#pair=token",
+    ]);
+  });
+  it("rejects the full IPv6 link-local range even when its scope id is zero", () => {
+    const candidates = discoverCandidates(
+      {
+        ethernet: [
+          ipv6("fe80::2"),
+          ipv6("fe90::2"),
+          ipv6("fea0::2"),
+          ipv6("feBf::2"),
+          ipv6("fe7f::2"),
+          ipv6("fec0::2"),
+        ],
+      },
+      8585,
+      "token",
+    );
+
+    expect(candidates.map((candidate) => candidate.host)).toEqual(["fe7f::2", "fec0::2"]);
+  });
   it("only exposes private LAN IPv4 addresses", () => {
     const interfaces = {
       ethernet: [address("192.168.1.20"), address("203.0.113.10")],

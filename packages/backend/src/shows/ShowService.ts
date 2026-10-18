@@ -48,8 +48,8 @@ const makeShowService = Effect.fnUntraced(function* () {
   const ids = yield* Ids;
   const repository = yield* ShowRepository;
 
-  const list = repository.list.pipe(
-    Effect.map((documents) => sortShowSummaries(documents.map(toSummary))),
+  const list = repository.summaries.pipe(
+    Effect.map(sortShowSummaries),
     Effect.mapError(toRpcError("Could not list shows.")),
   );
 

@@ -1,3 +1,4 @@
+import { asyncResultValueOrElse } from "@/client";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
@@ -55,7 +56,7 @@ type OpenDialog = {
 
 export function ChatPresetsWorkspace({ showId }: { readonly showId: ShowId }) {
   const profilesResult = useAtomValue(profileAtoms.state);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
 
   if (!selected) {
@@ -77,7 +78,7 @@ function ProfileChatPresetsWorkspace({
   readonly profile: Profile;
 }) {
   const result = useAtomValue(chatAtoms(showId, profile.id).state);
-  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const snapshot = asyncResultValueOrElse(result, () => undefined);
   const [channelId, setChannelId] = React.useState<ChatChannelId>();
   const channel = snapshot?.channels.find((item) => item.id === channelId) ?? snapshot?.channels[0];
 

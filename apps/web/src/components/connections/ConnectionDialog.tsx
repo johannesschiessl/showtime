@@ -286,7 +286,7 @@ export function ConnectionsSettings() {
           <SettingsSection title="Network">
             <SettingsItem
               title="Allow connections"
-              description="Host the web app and let approved devices connect."
+              description="Use only on a trusted private network. Direct HTTP connections send device credentials and show data without encryption. HTTP network connections require the show computer to stay online and cannot install the offline app."
               action={
                 <Switch
                   id="showtime-connections-enabled"

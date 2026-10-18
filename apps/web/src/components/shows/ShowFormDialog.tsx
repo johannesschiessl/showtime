@@ -1,3 +1,4 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { ChevronsUpDownIcon, PlusIcon } from "lucide-react";
 import { type Color, type ShowName } from "@showtime/contracts";
@@ -12,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useAtom, useAtomSet } from "@effect/atom-react";
+import { useAtom } from "@effect/atom-react";
 import { createShowAtom, editShowAtom, showDialogAtom, showMutationOptions } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 import { cn } from "@/lib/utils";
@@ -22,8 +23,8 @@ import { ColorPickerPopover } from "@/components/ColorPickerPopover";
 
 export function ShowFormDialog() {
   const [dialog, setDialog] = useAtom(showDialogAtom);
-  const createShow = useAtomSet(createShowAtom, { mode: "promiseExit" });
-  const editShow = useAtomSet(editShowAtom, { mode: "promiseExit" });
+  const createShow = useRpcMutation(createShowAtom);
+  const editShow = useRpcMutation(editShowAtom);
   const isOpen = dialog.type === "create" || dialog.type === "edit";
   const isEdit = dialog.type === "edit";
   const [name, setName] = React.useState("");

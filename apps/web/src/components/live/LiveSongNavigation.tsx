@@ -6,11 +6,15 @@ import { liveSongNavigationDirection } from "./LiveSongNavigationState";
 export function LiveSongNavigation({
   previous,
   next,
+  hasPrevious,
+  hasNext,
   onPrevious,
   onNext,
 }: {
   readonly previous?: string;
   readonly next?: string;
+  readonly hasPrevious: boolean;
+  readonly hasNext: boolean;
   readonly onPrevious: () => void;
   readonly onNext: () => void;
 }) {
@@ -36,17 +40,17 @@ export function LiveSongNavigation({
         return;
 
       const direction = liveSongNavigationDirection(event.key);
-      if (direction === "previous" && previous) {
+      if (direction === "previous" && hasPrevious) {
         event.preventDefault();
         onPrevious();
-      } else if (direction === "next" && next) {
+      } else if (direction === "next" && hasNext) {
         event.preventDefault();
         onNext();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [next, onNext, onPrevious, previous]);
+  }, [hasNext, onNext, onPrevious, hasPrevious]);
 
   return (
     <nav
@@ -57,27 +61,33 @@ export function LiveSongNavigation({
         <Button
           variant="outline"
           size="lg"
-          disabled={!previous}
-          aria-label={previous ? `Previous song: ${previous}` : "Start of setlist"}
+          disabled={!hasPrevious}
+          aria-label={
+            hasPrevious ? `Previous song: ${previous || "Unnamed song"}` : "Start of setlist"
+          }
           aria-keyshortcuts="ArrowLeft ArrowDown"
           onClick={onPrevious}
           className="w-full min-w-0 sm:w-auto"
         >
           <ChevronLeftIcon />
-          <span className="min-w-0 flex-1 truncate sm:max-w-40">{previous ?? "Start"}</span>
+          <span className="min-w-0 flex-1 truncate sm:max-w-40">
+            {hasPrevious ? previous || "Unnamed song" : "Start"}
+          </span>
         </Button>
       </div>
       <div className="min-w-0 sm:pointer-events-auto sm:fixed sm:top-1/2 sm:right-4 sm:-translate-y-1/2">
         <Button
           variant="outline"
           size="lg"
-          disabled={!next}
-          aria-label={next ? `Next song: ${next}` : "End of setlist"}
+          disabled={!hasNext}
+          aria-label={hasNext ? `Next song: ${next || "Unnamed song"}` : "End of setlist"}
           aria-keyshortcuts="Space ArrowRight ArrowUp"
           onClick={onNext}
           className="w-full min-w-0 sm:w-auto"
         >
-          <span className="min-w-0 flex-1 truncate sm:max-w-40">{next ?? "End"}</span>
+          <span className="min-w-0 flex-1 truncate sm:max-w-40">
+            {hasNext ? next || "Unnamed song" : "End"}
+          </span>
           <ChevronRightIcon />
         </Button>
       </div>

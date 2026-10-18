@@ -1,3 +1,6 @@
+import { asyncResultValueOrElse } from "@/client";
+import { isFailureWithoutValue } from "@/client";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -21,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { songAtoms, songsRpcReactivityKey, type SongListItem } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 
@@ -50,9 +53,9 @@ function RouteComponent() {
   const { showId } = Route.useParams();
   const typedShowId = showId as ShowId;
   const result = useAtomValue(songAtoms(typedShowId).songs);
-  const reorder = useAtomSet(songAtoms(typedShowId).reorder, { mode: "promiseExit" });
-  const edit = useAtomSet(songAtoms(typedShowId).edit, { mode: "promiseExit" });
-  const songs = AsyncResult.isSuccess(result) ? result.value : [];
+  const reorder = useRpcMutation(songAtoms(typedShowId).reorder);
+  const edit = useRpcMutation(songAtoms(typedShowId).edit);
+  const songs = asyncResultValueOrElse(result, () => []);
   const [previewSongs, setPreviewSongs] = React.useState<ReadonlyArray<SongListItem>>(songs);
   const [draggedId, setDraggedId] = React.useState<SongId>();
   const [dragPosition, setDragPosition] = React.useState<DragPosition>();
@@ -249,7 +252,7 @@ function RouteComponent() {
             <EmptyTitle>Loading songs</EmptyTitle>
           </EmptyHeader>
         </Empty>
-      ) : AsyncResult.isFailure(result) && songs.length === 0 ? (
+      ) : isFailureWithoutValue(result) ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">
