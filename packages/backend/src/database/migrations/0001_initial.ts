@@ -169,12 +169,50 @@ const initial = Effect.fn("ShowtimeMigration0001Initial")(function* () {
     parts_json TEXT,
     answer_json TEXT,
     reply_to_message_id TEXT REFERENCES chat_messages(id) ON DELETE CASCADE,
-    sent_at TEXT NOT NULL
+    sent_at TEXT NOT NULL,
+    channel_position INTEGER NOT NULL DEFAULT 0
   )`;
   yield* sql`CREATE INDEX chat_messages_channel_sequence ON chat_messages(channel_id, sequence)`;
   yield* sql`CREATE INDEX chat_messages_show_sequence ON chat_messages(show_id, sequence)`;
   yield* sql`CREATE INDEX chat_messages_sender_profile ON chat_messages(sender_profile_id)`;
   yield* sql`CREATE INDEX chat_messages_reply ON chat_messages(reply_to_message_id)`;
+  yield* sql`CREATE TABLE chat_channel_counts (
+    channel_id TEXT PRIMARY KEY REFERENCES chat_channels(id) ON DELETE CASCADE,
+    message_count INTEGER NOT NULL,
+    newest_sequence INTEGER NOT NULL
+  )`;
+  yield* sql`CREATE TABLE chat_sender_counts (
+    channel_id TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
+    profile_id TEXT NOT NULL,
+    message_count INTEGER NOT NULL,
+    PRIMARY KEY (channel_id, profile_id)
+  )`;
+  yield* sql`CREATE TRIGGER chat_message_insert_counts AFTER INSERT ON chat_messages BEGIN
+    INSERT INTO chat_channel_counts VALUES (NEW.channel_id, 1, NEW.sequence)
+      ON CONFLICT(channel_id) DO UPDATE SET message_count = message_count + 1,
+        newest_sequence = MAX(newest_sequence, NEW.sequence);
+    INSERT INTO chat_sender_counts VALUES (NEW.channel_id, NEW.sender_profile_id, 1)
+      ON CONFLICT(channel_id, profile_id) DO UPDATE SET message_count = message_count + 1;
+    UPDATE chat_messages SET channel_position = (
+      SELECT message_count FROM chat_channel_counts WHERE channel_id = NEW.channel_id
+    ) WHERE sequence = NEW.sequence;
+  END`;
+  yield* sql`CREATE TRIGGER chat_message_delete_counts AFTER DELETE ON chat_messages BEGIN
+    UPDATE chat_channel_counts SET message_count = message_count - 1,
+      newest_sequence = COALESCE((SELECT MAX(sequence) FROM chat_messages WHERE channel_id = OLD.channel_id), 0)
+      WHERE channel_id = OLD.channel_id;
+    UPDATE chat_sender_counts SET message_count = message_count - 1
+      WHERE channel_id = OLD.channel_id AND profile_id = OLD.sender_profile_id;
+  END`;
+  // Break every reply edge before either parent starts its foreign-key cascades.
+  yield* sql`CREATE TRIGGER show_detach_chat_replies BEFORE DELETE ON shows BEGIN
+    UPDATE chat_messages SET reply_to_message_id = NULL
+      WHERE show_id = OLD.id AND reply_to_message_id IS NOT NULL;
+  END`;
+  yield* sql`CREATE TRIGGER channel_detach_chat_replies BEFORE DELETE ON chat_channels BEGIN
+    UPDATE chat_messages SET reply_to_message_id = NULL
+      WHERE channel_id = OLD.id AND reply_to_message_id IS NOT NULL;
+  END`;
   yield* sql`CREATE TABLE chat_profile_channel_state (
     show_id TEXT NOT NULL REFERENCES shows(id) ON DELETE CASCADE,
     channel_id TEXT NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,

@@ -9,16 +9,10 @@ import { idAlphabet, idSuffixLength, profileIdPrefix } from "@showtime/contracts
 import { normalizeShowtimeHostName } from "@showtime/shared";
 import * as HomeDirectory from "../platform/HomeDirectory.js";
 import initial from "./migrations/0001_initial.js";
-import chatCounts from "./migrations/0002_chat_counts.js";
-import chatReplyDeletion from "./migrations/0003_chat_reply_deletion.js";
 
 export const databaseFileName = "showtime.db";
 export const migrationTableName = "effect_sql_migrations";
-export const currentMigrations = [
-  [1, "initial"],
-  [2, "chat_counts"],
-  [3, "chat_reply_deletion"],
-] as const;
+export const currentMigrations = [[1, "initial"]] as const;
 
 const initializationLockFileName = `${databaseFileName}.initialize.db`;
 const initializationLockWaitMilliseconds = 20_000;
@@ -40,6 +34,8 @@ const criticalTables = [
   "song_mix_names",
   "chat_channels",
   "chat_messages",
+  "chat_channel_counts",
+  "chat_sender_counts",
   "chat_profile_channel_state",
   "chat_presets",
 ] as const;
@@ -55,23 +51,18 @@ const criticalIndexes = [
   "chat_presets_show_updated",
 ] as const;
 
-const migrationObjects = [
-  { version: 2, type: "table", name: "chat_channel_counts" },
-  { version: 2, type: "table", name: "chat_sender_counts" },
-  { version: 2, type: "trigger", name: "chat_message_insert_counts" },
-  { version: 2, type: "trigger", name: "chat_message_delete_counts" },
-  { version: 3, type: "trigger", name: "show_detach_chat_replies" },
-  { version: 3, type: "trigger", name: "channel_detach_chat_replies" },
+const criticalTriggers = [
+  "chat_message_insert_counts",
+  "chat_message_delete_counts",
+  "show_detach_chat_replies",
+  "channel_detach_chat_replies",
 ] as const;
 
-const hasMigrationObjects = (
+const hasCriticalTriggers = (
   objects: ReadonlyArray<{ readonly type: string; readonly name: string }>,
-  version: number,
 ) =>
-  migrationObjects.every(
-    (required) =>
-      required.version > version ||
-      objects.some((object) => object.type === required.type && object.name === required.name),
+  criticalTriggers.every((name) =>
+    objects.some((object) => object.type === "trigger" && object.name === name),
   );
 
 const expectedColumns: Readonly<Record<(typeof criticalTables)[number], ReadonlyArray<string>>> = {
@@ -140,6 +131,8 @@ const expectedColumns: Readonly<Record<(typeof criticalTables)[number], Readonly
     "sent_at",
     "channel_position",
   ],
+  chat_channel_counts: ["channel_id", "message_count", "newest_sequence"],
+  chat_sender_counts: ["channel_id", "profile_id", "message_count"],
   chat_profile_channel_state: [
     "show_id",
     "channel_id",
@@ -158,11 +151,6 @@ const expectedColumns: Readonly<Record<(typeof criticalTables)[number], Readonly
     "updated_at",
   ],
 };
-
-const columnsAtVersion = (table: (typeof criticalTables)[number], version: number) =>
-  table === "chat_messages" && version < 2
-    ? expectedColumns[table].slice(0, -1)
-    : expectedColumns[table];
 
 const sameStrings = (left: ReadonlyArray<string>, right: ReadonlyArray<string>) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
@@ -199,11 +187,7 @@ export class DatabaseBackup extends Context.Service<
 >()("@showtime/backend/database/DatabaseBackup") {}
 
 const isCurrentLedger = (rows: ReadonlyArray<{ migration_id: number; name: string }>) =>
-  rows.length === currentMigrations.length && isKnownLedger(rows);
-
-const isKnownLedger = (rows: ReadonlyArray<{ migration_id: number; name: string }>) =>
-  rows.length > 0 &&
-  rows.length <= currentMigrations.length &&
+  rows.length === currentMigrations.length &&
   rows.every(
     (row, index) =>
       row.migration_id === currentMigrations[index]![0] &&
@@ -240,10 +224,10 @@ const inspectExistingDatabase = (filename: string) =>
           applicationObjects.every((row) => row.type === "table" && row.name === migrationTableName)
         )
           return;
-        if (!isKnownLedger(ledger))
+        if (!isCurrentLedger(ledger))
           throw new Error("The migration ledger is not the released baseline.");
-        if (!hasMigrationObjects(objects, ledger.length))
-          throw new Error("The database is missing required migration tables or triggers.");
+        if (!hasCriticalTriggers(objects))
+          throw new Error("The database is missing required triggers.");
         const tables = new Set(
           objects.filter((row) => row.type === "table").map((row) => row.name),
         );
@@ -263,7 +247,7 @@ const inspectExistingDatabase = (filename: string) =>
           if (
             !sameStrings(
               columns.map((column) => column.name),
-              columnsAtVersion(table, ledger.length),
+              expectedColumns[table],
             )
           )
             throw new Error(`The ${table} table does not match the released schema.`);
@@ -433,10 +417,10 @@ const validateCurrentSchema = Effect.fn("ShowtimeDatabaseValidate")(function* ()
     });
   const objects = yield* sql<{ type: string; name: string }>`SELECT type, name FROM sqlite_master
     WHERE type IN ('table', 'index', 'trigger')`;
-  if (!hasMigrationObjects(objects, currentMigrations.length))
+  if (!hasCriticalTriggers(objects))
     return yield* new DatabaseInitializationError({
-      message: "The current database is missing a required migration table or trigger.",
-      stage: "schema-migrations",
+      message: "The current database is missing a required trigger.",
+      stage: "schema-triggers",
     });
   const tables = new Set(objects.filter((row) => row.type === "table").map((row) => row.name));
   const indexes = new Set(objects.filter((row) => row.type === "index").map((row) => row.name));
@@ -528,8 +512,6 @@ const initialize = Effect.fn("ShowtimeDatabaseInitialize")(function* () {
         yield* SqliteMigrator.run({
           loader: SqliteMigrator.fromRecord({
             "0001_initial": initial,
-            "0002_chat_counts": chatCounts,
-            "0003_chat_reply_deletion": chatReplyDeletion,
           }),
           table: migrationTableName,
         });

@@ -7,9 +7,10 @@ are not application state.
 ## Prerelease cutover
 
 The move to `showtime.db` is a clean reset, not a migration from the current development builds.
-Migration `0001_initial` creates the baseline schema. Forward migrations add maintained chat
-counts and detach reply relationships before parent deletion. Databases with a known ledger prefix
-that pass preflight upgrade in place; unknown histories and unsupported layouts are rejected.
+Migration `0001_initial` creates the entire version-1 release schema, including maintained chat
+counts and triggers that detach reply relationships before parent deletion. There are no migrations
+from prerelease state. Test users must manually remove their old databases and state files before
+starting the initial release.
 
 Chat messages have a channel-local position, assigned by the insert-count trigger. Snapshots use
 that position to compute unread totals through indexed lookups. Message history is append-only;
@@ -31,10 +32,10 @@ A preflight guard detects known prerelease backend state before opening or creat
 fails startup with an actionable reset message and leaves every file untouched, even when a current
 database also exists. This guard is not a migration and must never contain an importer.
 
-An existing `showtime.db` is usable only when its `effect_sql_migrations` history is a valid prefix
-of the migrations shipped by Showtime and it passes the schema checks listed below. This includes
-databases created by prerelease builds with that known history and those required objects.
-Prerelease JSON and experimental databases that fail these checks remain unsupported.
+An existing `showtime.db` is usable only when its `effect_sql_migrations` history contains exactly
+`1 / initial` and it passes the version-1 schema checks listed below. The earlier prerelease
+version-1 layout and version-2/version-3 ledgers are rejected without upgrading or deleting data.
+An empty database or empty migration ledger can finish initialization after an interrupted startup.
 
 Browser local storage is an unavoidable device-local exception: a remote browser cannot open the
 host's SQLite database. It contains connection credentials and device preferences, not
@@ -101,7 +102,9 @@ The baseline contains these areas:
 - `shows`, `microphones`, `mixes`, and `songs`, including ownership, ordering, timestamps, and the
   existing soft-deletion semantics;
 - normalized song-to-mix assignments and ordered microphone- and mix-name overrides;
-- chat channels, messages, profile-channel state, and presets; and
+- chat channels, messages with channel-local positions, maintained channel/sender counts,
+  profile-channel state, and presets;
+- count-maintenance and reply-detachment triggers; and
 - indexes for all foreign keys and hot list, ordering, authorization, and sequence queries.
 
 Use foreign keys for ownership and consistency. Cascades are appropriate only when deleting the
@@ -203,25 +206,25 @@ The validation layer then verifies:
 
 1. the applied migration IDs and names match the shipped migrations;
 2. there are no gaps, unknown IDs, renamed entries, or future entries;
-3. required tables, indexes, and migration-specific triggers exist, and the critical tables have
+3. required tables, indexes, and triggers exist, and the critical tables have
    the expected ordered column names;
 4. bootstrap invariants hold, including exactly one settings row and a valid default profile; and
 5. `PRAGMA quick_check` and `PRAGMA foreign_key_check` succeed, and connection safety settings
    are active.
 
 The exact required names and ordered columns are defined by `criticalTables`, `criticalIndexes`,
-`migrationObjects`, and `expectedColumns` in
+`criticalTriggers`, and `expectedColumns` in
 [`Database.ts`](../packages/backend/src/database/Database.ts). The required indexes are
 `app_settings_default_profile`, `connection_clients_profile`, `shows_name_id`,
 `microphones_show_active_order`, `mixes_show_active_order`, `songs_show_active_order`,
-`chat_messages_channel_sequence`, and `chat_presets_show_updated`. Migration 2 also requires the
+`chat_messages_channel_sequence`, and `chat_presets_show_updated`. The version-1 baseline requires the
 `chat_channel_counts` and `chat_sender_counts` tables and the `chat_message_insert_counts` and
-`chat_message_delete_counts` triggers. Migration 3 requires the `show_detach_chat_replies` and
+`chat_message_delete_counts` triggers, along with the `show_detach_chat_replies` and
 `channel_detach_chat_replies` triggers.
 
-Preflight inspects existing databases read-only before startup writes. It accepts a known prefix
-and checks only the objects required at that version, along with bootstrap state and both SQLite
-integrity checks. It does not compare full DDL, index definitions, or every migration-defined
+Preflight inspects existing databases read-only before startup writes. It requires the complete
+version-1 ledger and schema, along with valid bootstrap state and both SQLite integrity checks.
+It does not compare full DDL, index definitions, or every migration-defined
 constraint and index. After migrations, the current validator requires the full shipped ledger
 and reads back WAL, foreign-key enforcement, busy-timeout, and synchronous settings. An unsupported
 or future ledger is rejected without modifying the database.
@@ -297,6 +300,7 @@ Required coverage includes:
 - bootstrap creating one valid default profile/settings pair;
 - current-database restart performing no schema or bootstrap writes;
 - duplicate, missing, renamed, unknown, and future ledger entries failing;
+- prerelease version-1 layouts and version-2/version-3 ledgers failing without changing files;
 - foreign-key and uniqueness constraints;
 - nested transactions/savepoints and rollback after failures;
 - concurrent migrator startup;
