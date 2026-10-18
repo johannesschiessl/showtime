@@ -1,3 +1,4 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { Trash2Icon } from "lucide-react";
 import { Exit } from "effect";
@@ -12,7 +13,7 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useAtom, useAtomSet } from "@effect/atom-react";
+import { useAtom } from "@effect/atom-react";
 import { deleteShowAtom, showDialogAtom, showMutationOptions } from "@/client";
 import { rpcErrorMessageFromCause } from "@/client";
 
@@ -22,7 +23,7 @@ type ShowDeleteDialogProps = {
 
 export function ShowDeleteDialog({ onDeleted }: ShowDeleteDialogProps) {
   const [dialog, setDialog] = useAtom(showDialogAtom);
-  const deleteShow = useAtomSet(deleteShowAtom, { mode: "promiseExit" });
+  const deleteShow = useRpcMutation(deleteShowAtom);
   const isOpen = dialog.type === "delete";
   const showName = dialog.type === "delete" ? dialog.show.name : "this show";
   const [isDeleting, setIsDeleting] = React.useState(false);

@@ -1,5 +1,6 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { DateTime, Exit } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { MessageScroller, useMessageScrollerScrollable } from "@shadcn/react/message-scroller";
@@ -217,10 +218,10 @@ function ChannelTabs({
   readonly inTitleBar: boolean;
 }) {
   const atoms = chatAtoms(showId, profileId);
-  const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
-  const renameChannel = useAtomSet(atoms.renameChannel, { mode: "promiseExit" });
-  const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
-  const setNotifications = useAtomSet(atoms.setNotifications, { mode: "promiseExit" });
+  const createChannel = useRpcMutation(atoms.createChannel);
+  const renameChannel = useRpcMutation(atoms.renameChannel);
+  const deleteChannel = useRpcMutation(atoms.deleteChannel);
+  const setNotifications = useRpcMutation(atoms.setNotifications);
   const [renameTarget, setRenameTarget] = React.useState<
     Pick<ChatChannel, "id" | "name"> | undefined
   >();
@@ -647,7 +648,7 @@ function ReadTracker({
   readonly active: boolean;
 }) {
   const { end: canScrollToEnd } = useMessageScrollerScrollable();
-  const markRead = useAtomSet(chatAtoms(showId, profileId).markRead, { mode: "promiseExit" });
+  const markRead = useRpcMutation(chatAtoms(showId, profileId).markRead);
   const atBottom = !canScrollToEnd;
   const lastMarked = React.useRef(channel.lastReadSequence);
 

@@ -1,13 +1,13 @@
 import * as React from "react";
-import { useAtomSet } from "@effect/atom-react";
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import { Exit } from "effect";
 import { nanoid } from "nanoid";
 import { liveHeartbeatIntervalMs, type LiveSessionId, type ShowId } from "@showtime/contracts";
 import { livePresenceAtoms } from "@/client";
 
 export function useLivePresence(showId: ShowId): boolean {
-  const heartbeat = useAtomSet(livePresenceAtoms.heartbeat, { mode: "promiseExit" });
-  const release = useAtomSet(livePresenceAtoms.release, { mode: "promiseExit" });
+  const heartbeat = useRpcMutation(livePresenceAtoms.heartbeat);
+  const release = useRpcMutation(livePresenceAtoms.release);
   const sessionId = React.useMemo(() => `live-${nanoid()}` as LiveSessionId, []);
   const [registered, setRegistered] = React.useState(false);
 

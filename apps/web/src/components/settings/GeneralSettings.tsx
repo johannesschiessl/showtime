@@ -1,3 +1,4 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
@@ -58,7 +59,7 @@ export function GeneralSettings() {
 }
 
 function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
-  const editShow = useAtomSet(editShowAtom, { mode: "promiseExit" });
+  const editShow = useRpcMutation(editShowAtom);
   const setDialog = useAtomSet(showDialogAtom);
   const [name, setName] = React.useState<string>(show.name);
   const [color, setColor] = React.useState<Color>(show.color);

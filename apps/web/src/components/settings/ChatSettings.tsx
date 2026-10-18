@@ -1,5 +1,6 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Exit, Option } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import {
@@ -87,8 +88,8 @@ function ChatSettingsLoaded({
   const atoms = chatAtoms(showId, ownerProfile.id);
   const result = useAtomValue(atoms.state);
   const snapshot = currentChatSnapshot(result);
-  const createChannel = useAtomSet(atoms.createChannel, { mode: "promiseExit" });
-  const deleteChannel = useAtomSet(atoms.deleteChannel, { mode: "promiseExit" });
+  const createChannel = useRpcMutation(atoms.createChannel);
+  const deleteChannel = useRpcMutation(atoms.deleteChannel);
   const [newName, setNewName] = React.useState("");
   const [deleteTarget, setDeleteTarget] = React.useState<ChatChannel>();
   const [busy, setBusy] = React.useState(false);
@@ -225,9 +226,7 @@ function ChannelNameInput({
   readonly channel: ChatChannel;
   readonly onError: (message: string | undefined) => void;
 }) {
-  const renameChannel = useAtomSet(chatAtoms(showId, ownerProfileId).renameChannel, {
-    mode: "promiseExit",
-  });
+  const renameChannel = useRpcMutation(chatAtoms(showId, ownerProfileId).renameChannel);
   const [name, setName] = React.useState(channel.name as string);
   const [saving, setSaving] = React.useState(false);
   const cancelSave = React.useRef(false);
@@ -462,9 +461,7 @@ function NotificationToggleCell({
   readonly snapshot: ChatSnapshot;
   readonly onError: (message: string | undefined) => void;
 }) {
-  const setNotifications = useAtomSet(chatAtoms(showId, profile.id).setNotifications, {
-    mode: "promiseExit",
-  });
+  const setNotifications = useRpcMutation(chatAtoms(showId, profile.id).setNotifications);
   const [saving, setSaving] = React.useState(false);
 
   const toggle = async (enabled: boolean) => {

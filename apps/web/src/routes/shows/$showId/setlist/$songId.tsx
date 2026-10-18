@@ -1,3 +1,4 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
@@ -48,7 +49,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { microphoneColorClassNames } from "@/components/microphones/microphone-color";
 import { cn } from "@/lib/utils";
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { mixAtoms, type MixListItem } from "@/client";
 import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
@@ -157,7 +158,7 @@ function SongDetail({
   readonly mixes: ReadonlyArray<MixListItem>;
   readonly microphones: ReadonlyArray<Microphone>;
 }) {
-  const edit = useAtomSet(songAtoms(showId).edit, { mode: "promiseExit" });
+  const edit = useRpcMutation(songAtoms(showId).edit);
   const [name, setName] = React.useState(song.name as string);
   const [artist, setArtist] = React.useState(song.artist as string);
   const [notes, setNotes] = React.useState(song.notes ?? "");
@@ -676,7 +677,7 @@ function SongDeleteDialog({
   readonly onOpenChange: (open: boolean) => void;
 }) {
   const navigate = useNavigate();
-  const deleteSong = useAtomSet(songAtoms(showId).delete, { mode: "promiseExit" });
+  const deleteSong = useRpcMutation(songAtoms(showId).delete);
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [error, setError] = React.useState<string>();
   React.useEffect(() => {

@@ -1,5 +1,5 @@
+import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import {
   bindChatPresetAnswer,
@@ -516,8 +516,8 @@ function PresetEditor({
   readonly onSaved: (preset: ChatPreset) => void;
 }) {
   const atoms = chatAtoms(showId, profileId);
-  const createPreset = useAtomSet(atoms.createPreset, { mode: "promiseExit" });
-  const updatePreset = useAtomSet(atoms.updatePreset, { mode: "promiseExit" });
+  const createPreset = useRpcMutation(atoms.createPreset);
+  const updatePreset = useRpcMutation(atoms.updatePreset);
   const [name, setName] = React.useState(preset?.name ?? "");
   const [template, setTemplate] = React.useState(preset?.template ?? "");
   const [drafts, setDrafts] = React.useState<Array<ChatPresetFieldDraft>>(() =>
@@ -681,7 +681,7 @@ function DeletePreset({
   readonly onDeleted: () => void;
   readonly onCancel: () => void;
 }) {
-  const remove = useAtomSet(chatAtoms(showId, profileId).deletePreset, { mode: "promiseExit" });
+  const remove = useRpcMutation(chatAtoms(showId, profileId).deletePreset);
   const [deleting, setDeleting] = React.useState(false);
   const [error, setError] = React.useState<string>();
   const confirm = async () => {
