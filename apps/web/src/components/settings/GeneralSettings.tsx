@@ -21,6 +21,7 @@ import { ColorPickerPopover } from "@/components/ColorPickerPopover";
 import { showColorClassNames } from "@/components/shows/show-color";
 import { ShowDeleteDialog } from "@/components/shows/ShowDeleteDialog";
 import { cn } from "@/lib/utils";
+import { mergeRemoteDraft } from "@/lib/draft";
 
 export function isUnchangedShowSave(
   next: { readonly name: string; readonly color: Color },
@@ -69,10 +70,23 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
   const pendingSaves = React.useRef(0);
   const suppressNextBlurSave = React.useRef(false);
   const committed = React.useRef({ name: show.name as string, color: show.color });
+  const previousRemote = React.useRef(committed.current);
+  const draft = React.useRef(committed.current);
+
+  React.useEffect(() => {
+    const incoming = { name: show.name as string, color: show.color };
+    const merged = mergeRemoteDraft(draft.current, previousRemote.current, incoming);
+    previousRemote.current = incoming;
+    committed.current = incoming;
+    draft.current = merged;
+    setName(merged.name);
+    setColor(merged.color);
+  }, [show.name, show.color]);
 
   const save = (nextName: string, nextColor: Color) => {
     const trimmed = nextName.trim();
     if (!trimmed) {
+      draft.current = { ...draft.current, name: committed.current.name };
       setName(committed.current.name);
       return;
     }
@@ -120,7 +134,10 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
                 size={Math.max(8, Math.min(40, name.length + 2))}
                 value={name}
                 maxLength={80}
-                onChange={(event) => setName(event.currentTarget.value)}
+                onChange={(event) => {
+                  draft.current = { ...draft.current, name: event.currentTarget.value };
+                  setName(event.currentTarget.value);
+                }}
                 onBlur={() => {
                   if (suppressNextBlurSave.current) {
                     suppressNextBlurSave.current = false;
@@ -132,6 +149,7 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
                   if (event.key === "Enter") event.currentTarget.blur();
                   if (event.key === "Escape") {
                     suppressNextBlurSave.current = true;
+                    draft.current = { ...draft.current, name: committed.current.name };
                     setName(committed.current.name);
                     event.currentTarget.blur();
                   }
@@ -146,6 +164,7 @@ function GeneralSettingsLoaded({ show }: { readonly show: ShowListItem }) {
               <ColorPickerPopover
                 color={color}
                 onColorChange={(nextColor) => {
+                  draft.current = { ...draft.current, color: nextColor };
                   setColor(nextColor);
                   save(name, nextColor);
                 }}
