@@ -222,8 +222,10 @@ The exact required names and ordered columns are defined by `criticalTables`, `c
 `chat_message_delete_counts` triggers, along with the `show_detach_chat_replies` and
 `channel_detach_chat_replies` triggers.
 
-Preflight inspects existing databases read-only before startup writes. It requires the complete
-version-1 ledger and schema, along with valid bootstrap state and both SQLite integrity checks.
+Preflight inspects existing databases read-only before startup writes. Empty databases and databases
+containing only an empty `effect_sql_migrations` table are exempt so interrupted initialization can
+finish. Otherwise, preflight requires the complete version-1 ledger and schema, along with valid
+bootstrap state and both SQLite integrity checks.
 It does not compare full DDL, index definitions, or every migration-defined
 constraint and index. After migrations, the current validator requires the full shipped ledger
 and reads back WAL, foreign-key enforcement, busy-timeout, and synchronous settings. An unsupported
