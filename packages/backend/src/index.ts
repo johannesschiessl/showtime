@@ -375,7 +375,8 @@ const makeServerLive = (options: BackendOptions, desktopCapability: string) =>
     // Build the RPC server and its routes together in serve's private memo map.
     return HttpRouter.serve(
       Layer.mergeAll(rpcServer, staticFiles.pipe(Layer.provide(remoteHostingGate))),
-      { disableListenLog: true },
+      // Authentication credentials are carried in request paths, including on failed routes.
+      { disableListenLog: true, disableLogger: true },
     ).pipe(Layer.provide(RpcSerialization.layerJson));
   })();
 
