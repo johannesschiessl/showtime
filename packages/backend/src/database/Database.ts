@@ -9,10 +9,14 @@ import { idAlphabet, idSuffixLength, profileIdPrefix } from "@showtime/contracts
 import { normalizeShowtimeHostName } from "@showtime/shared";
 import * as HomeDirectory from "../platform/HomeDirectory.js";
 import initial from "./migrations/0001_initial.js";
+import chatCounts from "./migrations/0002_chat_counts.js";
 
 export const databaseFileName = "showtime.db";
 export const migrationTableName = "effect_sql_migrations";
-export const currentMigrations = [[1, "initial"]] as const;
+export const currentMigrations = [
+  [1, "initial"],
+  [2, "chat_counts"],
+] as const;
 
 const initializationLockFileName = `${databaseFileName}.initialize.lock`;
 const initializationLockWaitMilliseconds = 20_000;
@@ -114,6 +118,7 @@ const expectedColumns: Readonly<Record<(typeof criticalTables)[number], Readonly
     "answer_json",
     "reply_to_message_id",
     "sent_at",
+    "channel_position",
   ],
   chat_profile_channel_state: [
     "show_id",
@@ -133,6 +138,11 @@ const expectedColumns: Readonly<Record<(typeof criticalTables)[number], Readonly
     "updated_at",
   ],
 };
+
+const columnsAtVersion = (table: (typeof criticalTables)[number], version: number) =>
+  table === "chat_messages" && version < 2
+    ? expectedColumns[table].slice(0, -1)
+    : expectedColumns[table];
 
 const sameStrings = (left: ReadonlyArray<string>, right: ReadonlyArray<string>) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
@@ -206,7 +216,10 @@ const inspectExistingDatabase = (filename: string) =>
           applicationObjects.every((row) => row.type === "table" && row.name === migrationTableName)
         )
           return;
-        if (!isCurrentLedger(ledger))
+        if (
+          !isCurrentLedger(ledger) &&
+          !(ledger.length === 1 && ledger[0]?.migration_id === 1 && ledger[0].name === "initial")
+        )
           throw new Error("The migration ledger is not the released baseline.");
         const tables = new Set(
           objects.filter((row) => row.type === "table").map((row) => row.name),
@@ -227,7 +240,7 @@ const inspectExistingDatabase = (filename: string) =>
           if (
             !sameStrings(
               columns.map((column) => column.name),
-              expectedColumns[table],
+              columnsAtVersion(table, ledger.length),
             )
           )
             throw new Error(`The ${table} table does not match the released schema.`);
@@ -551,7 +564,10 @@ const initialize = Effect.fn("ShowtimeDatabaseInitialize")(function* () {
         yield* sql`PRAGMA journal_mode = WAL`;
         yield* sql`PRAGMA synchronous = FULL`;
         yield* SqliteMigrator.run({
-          loader: SqliteMigrator.fromRecord({ "0001_initial": initial }),
+          loader: SqliteMigrator.fromRecord({
+            "0001_initial": initial,
+            "0002_chat_counts": chatCounts,
+          }),
           table: migrationTableName,
         });
         yield* sql.withTransaction(

@@ -226,14 +226,14 @@ const make = Effect.gen(function* () {
     Effect.gen(function* () {
       const rows = (yield* sql`SELECT id, sequence, show_id, channel_id, sender_profile_id, body,
           parts_json, answer_json, reply_to_message_id, sent_at
-        FROM (
-          SELECT m.*,
-            ROW_NUMBER() OVER (PARTITION BY m.channel_id ORDER BY m.sequence DESC) AS replay_rank
-          FROM chat_channels c
-          INNER JOIN chat_messages m ON m.channel_id = c.id
+        FROM chat_messages
+        WHERE sequence IN (
+          SELECT recent.sequence FROM chat_channels c
+          JOIN chat_messages recent ON recent.sequence IN (
+            SELECT sequence FROM chat_messages WHERE channel_id = c.id ORDER BY sequence DESC LIMIT ${replayLimit}
+          )
           WHERE c.show_id = ${showId}
         )
-        WHERE replay_rank <= ${replayLimit}
         ORDER BY sequence`) as unknown as ReadonlyArray<MessageRow>;
       const byChannel = new Map<ChatChannelId, Array<ChatMessage>>();
       for (const row of rows) {
@@ -279,18 +279,22 @@ const make = Effect.gen(function* () {
           c.show_id,
           c.name,
           c.created_at,
-          COUNT(m.sequence) AS message_count,
-          SUM(CASE WHEN m.sender_profile_id != ${profileId} THEN 1 ELSE 0 END) AS incoming_message_count,
-          MAX(m.sequence) AS newest_sequence,
+          COALESCE(t.message_count, 0) AS message_count,
+          COALESCE(t.message_count, 0) - COALESCE(own.message_count, 0) AS incoming_message_count,
+          t.newest_sequence,
           s.last_read_sequence,
           s.notifications_enabled,
-          SUM(CASE WHEN m.sequence > COALESCE(s.last_read_sequence, 0) THEN 1 ELSE 0 END) AS unread_count
+          COALESCE(t.message_count, 0) - COALESCE((
+            SELECT m.channel_position FROM chat_messages m
+            WHERE m.channel_id = c.id AND m.sequence <= COALESCE(s.last_read_sequence, 0)
+            ORDER BY m.sequence DESC LIMIT 1
+          ), 0) AS unread_count
         FROM chat_channels c
         LEFT JOIN chat_profile_channel_state s
           ON s.show_id = c.show_id AND s.channel_id = c.id AND s.profile_id = ${profileId}
-        LEFT JOIN chat_messages m ON m.channel_id = c.id
+        LEFT JOIN chat_channel_counts t ON t.channel_id = c.id
+        LEFT JOIN chat_sender_counts own ON own.channel_id = c.id AND own.profile_id = ${profileId}
         WHERE c.show_id = ${showId}
-        GROUP BY c.id
         ORDER BY c.created_at, c.id`) as unknown as ReadonlyArray<ChannelRow>;
       const messagesByChannel = yield* loadMessages(showId);
       const presets = yield* loadPresets(showId);
@@ -616,9 +620,9 @@ const make = Effect.gen(function* () {
       yield* sql`INSERT INTO chat_profile_channel_state
           (show_id, channel_id, profile_id, last_read_sequence, notifications_enabled)
         SELECT ${params.showId}, c.id, ${params.profileId},
-          MIN(${params.sequence}, COALESCE(MAX(m.sequence), 0)), 1
+          MIN(${params.sequence}, COALESCE(t.newest_sequence, 0)), 1
         FROM chat_channels c
-        LEFT JOIN chat_messages m ON m.channel_id = c.id
+        LEFT JOIN chat_channel_counts t ON t.channel_id = c.id
         WHERE c.id = ${params.channelId} AND c.show_id = ${params.showId}
         GROUP BY c.id
         ON CONFLICT(show_id, channel_id, profile_id) DO UPDATE SET

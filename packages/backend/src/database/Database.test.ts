@@ -254,6 +254,39 @@ if (concurrencyWorkerHome && concurrencyWorkerBarrier && concurrencyWorkerId) {
 }
 
 describe("Showtime database", () => {
+  it("upgrades the initial ledger without resetting existing data", async () => {
+    const home = await makeHome();
+    await runDatabase(home, Effect.void);
+    const db = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
+    db.exec(`DROP TRIGGER chat_message_insert_counts;
+      DROP TRIGGER chat_message_delete_counts;
+      ALTER TABLE chat_messages DROP COLUMN channel_position;
+      DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;
+      DELETE FROM effect_sql_migrations WHERE migration_id >= 2;`);
+    db.exec(`INSERT INTO shows VALUES ('show', 'Show', 'blue', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+      INSERT INTO chat_channels VALUES ('channel', 'show', 'General', '2026-01-01T00:00:00.000Z');
+      INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, sent_at)
+        VALUES ('message', 'show', 'channel', 'sender', 'Existing message', '2026-01-01T00:00:00.000Z');`);
+    const profile = db.prepare("SELECT id FROM profiles").get();
+    db.close();
+    await runDatabase(home, Effect.void);
+    const upgraded = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
+    try {
+      expect(upgraded.prepare("SELECT id FROM profiles").get()).toEqual(profile);
+      expect(upgraded.prepare("SELECT body, channel_position FROM chat_messages").get()).toEqual({
+        body: "Existing message",
+        channel_position: 1,
+      });
+      expect(upgraded.prepare("SELECT message_count FROM chat_channel_counts").get()).toEqual({
+        message_count: 1,
+      });
+      expect(upgraded.prepare("SELECT COUNT(*) AS count FROM effect_sql_migrations").get()).toEqual(
+        { count: 2 },
+      );
+    } finally {
+      upgraded.close();
+    }
+  });
   it("creates migration 1, bootstrap state, safety pragmas, and a consistent backup", async () => {
     const home = await makeHome();
     const backupPath = path.join(home, "backup.db");
