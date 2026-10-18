@@ -55,6 +55,7 @@ import { microphoneAtoms } from "@/client";
 import { songAtoms, songsRpcReactivityKey } from "@/client";
 import { asyncResultValueOrElse, rpcErrorMessageFromCause } from "@/client";
 import { createdSongHandoff } from "@/components/songs/CreatedSongHandoff";
+import { mergeRemoteDraft } from "@/lib/draft";
 
 export const Route = createFileRoute("/shows/$showId/setlist/$songId")({
   component: RouteComponent,
@@ -171,8 +172,6 @@ function SongDetail({
   const [mixNames, setMixNames] = React.useState<ReadonlyArray<SongMixName>>(song.mixNames ?? []);
   const [isSaving, setIsSaving] = React.useState(false);
   const isSavingRef = React.useRef(false);
-  const queuedSaveCountRef = React.useRef(0);
-  const preserveDraftRef = React.useRef(false);
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const draftRef = React.useRef({
     name: song.name as string,
@@ -183,6 +182,7 @@ function SongDetail({
     mixNames: song.mixNames ?? [],
   });
   const [saveError, setSaveError] = React.useState<string>();
+  const previousRemote = React.useRef(draftRef.current);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
   const orderedMixes = [...mixes].sort(
@@ -191,8 +191,7 @@ function SongDetail({
   const hasUnpairedMix = orderedMixes.filter((mix) => mix.id !== mainMixId).length % 2 === 1;
 
   React.useEffect(() => {
-    if (queuedSaveCountRef.current > 0 || preserveDraftRef.current) return;
-    draftRef.current = {
+    const incoming = {
       name: song.name,
       artist: song.artist,
       notes: song.notes ?? "",
@@ -200,12 +199,15 @@ function SongDetail({
       microphoneNames: song.microphoneNames ?? [],
       mixNames: song.mixNames ?? [],
     };
-    setName(song.name);
-    setArtist(song.artist);
-    setNotes(song.notes ?? "");
-    setAssignments(song.mixAssignments);
-    setMicrophoneNames(song.microphoneNames ?? []);
-    setMixNames(song.mixNames ?? []);
+    const merged = mergeRemoteDraft(draftRef.current, previousRemote.current, incoming);
+    previousRemote.current = incoming;
+    draftRef.current = merged;
+    setName(merged.name);
+    setArtist(merged.artist);
+    setNotes(merged.notes);
+    setAssignments(merged.assignments);
+    setMicrophoneNames(merged.microphoneNames);
+    setMixNames(merged.mixNames);
   }, [song]);
 
   React.useLayoutEffect(() => {
@@ -259,7 +261,6 @@ function SongDetail({
       mixNames: normalizedMixNames,
     };
     draftRef.current = normalizedDraft;
-    queuedSaveCountRef.current += 1;
 
     const run = async () => {
       if (blockUi) {
@@ -285,11 +286,9 @@ function SongDetail({
         setIsSaving(false);
       }
       if (Exit.isFailure(result)) {
-        preserveDraftRef.current = true;
         setSaveError(rpcErrorMessageFromCause(result.cause));
         return false;
       }
-      preserveDraftRef.current = false;
       return true;
     };
 
@@ -298,9 +297,7 @@ function SongDetail({
       () => undefined,
       () => undefined,
     );
-    return result.finally(() => {
-      queuedSaveCountRef.current -= 1;
-    });
+    return result;
   };
 
   const toggleMicrophone = (mixId: Mix["id"], microphoneId: MicrophoneId) => {
