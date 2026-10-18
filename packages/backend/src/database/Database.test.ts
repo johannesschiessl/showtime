@@ -254,11 +254,29 @@ if (concurrencyWorkerHome && concurrencyWorkerBarrier && concurrencyWorkerId) {
 }
 
 describe("Showtime database", () => {
+  it("deletes shows with reply chains beyond SQLite's cascade recursion limit", async () => {
+    const home = await makeHome();
+    await runDatabase(
+      home,
+      Effect.gen(function* () {
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`INSERT INTO shows VALUES ('show', 'Show', 'sky', 'now', 'now')`;
+        yield* sql`INSERT INTO chat_channels VALUES ('channel', 'show', 'General', 'now')`;
+        yield* sql`WITH RECURSIVE chain(n) AS (VALUES(1) UNION ALL SELECT n + 1 FROM chain WHERE n < 1100)
+        INSERT INTO chat_messages (id, show_id, channel_id, sender_profile_id, body, reply_to_message_id, sent_at)
+        SELECT 'message' || n, 'show', 'channel', 'sender', 'Reply', CASE WHEN n = 1 THEN NULL ELSE 'message' || (n - 1) END, 'now' FROM chain`;
+        yield* sql`DELETE FROM shows WHERE id = 'show'`;
+        expect(yield* sql`SELECT * FROM chat_messages`).toEqual([]);
+        expect(yield* sql`PRAGMA foreign_key_check`).toEqual([]);
+      }),
+    );
+  });
   it("upgrades the initial ledger without resetting existing data", async () => {
     const home = await makeHome();
     await runDatabase(home, Effect.void);
     const db = new DatabaseSync(path.join(home, ".showtime", databaseFileName));
-    db.exec(`DROP TRIGGER chat_message_insert_counts;
+    db.exec(`DROP TRIGGER show_detach_chat_replies; DROP TRIGGER channel_detach_chat_replies;
+      DROP TRIGGER chat_message_insert_counts;
       DROP TRIGGER chat_message_delete_counts;
       ALTER TABLE chat_messages DROP COLUMN channel_position;
       DROP TABLE chat_sender_counts; DROP TABLE chat_channel_counts;
@@ -281,7 +299,7 @@ describe("Showtime database", () => {
         message_count: 1,
       });
       expect(upgraded.prepare("SELECT COUNT(*) AS count FROM effect_sql_migrations").get()).toEqual(
-        { count: 2 },
+        { count: currentMigrations.length },
       );
     } finally {
       upgraded.close();

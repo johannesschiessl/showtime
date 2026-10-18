@@ -7,8 +7,13 @@ are not application state.
 ## Prerelease cutover
 
 The move to `showtime.db` is a clean reset, not a migration from the current development builds.
-Migration `0001_initial` creates the complete current schema and is the version-1 first-release
-baseline.
+Migration `0001_initial` creates the baseline schema. Forward migrations add maintained chat
+counts and detach reply relationships before parent deletion. Complete databases with a known
+ledger prefix upgrade in place; unknown histories and incomplete schemas are rejected.
+
+Chat messages have a channel-local position, assigned by the insert-count trigger. Snapshots use
+that position to compute unread totals through indexed lookups. Message history is append-only;
+Showtime deletes messages only when their entire channel or show is deleted.
 
 Showtime must never read, import, repair, rewrite, delete, or otherwise accept these prerelease
 formats:
@@ -26,10 +31,9 @@ fails startup with an actionable reset message and leaves every file untouched, 
 database also exists. This guard is not a migration and must never contain an importer.
 
 An existing `showtime.db` is usable only when its `effect_sql_migrations` history is a valid prefix
-of the migrations shipped by a released Showtime build. Before the first release, the only accepted
-state is the exact current baseline. After release, forward migrations may accept older
-`showtime.db` versions produced by released builds; prerelease JSON and database formats never
-become supported sources.
+of the migrations shipped by Showtime, with the complete schema required by that prefix.
+Forward migrations accept only those known SQLite versions; prerelease JSON and experimental
+database formats never become supported sources.
 
 Browser local storage is an unavoidable device-local exception: a remote browser cannot open the
 host's SQLite database. It contains connection credentials and device preferences, not
@@ -82,7 +86,7 @@ it took effect.
 
 ## Baseline schema
 
-Migration `0001_initial` owns all DDL. Domain services must not run `CREATE TABLE`, inspect
+Versioned migrations own all DDL. Domain services must not run `CREATE TABLE`, inspect
 `PRAGMA table_info`, or issue conditional `ALTER TABLE` statements at startup.
 
 The baseline contains these areas:
