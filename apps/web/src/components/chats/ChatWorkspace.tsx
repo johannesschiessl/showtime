@@ -1,3 +1,4 @@
+import { asyncResultValueOrElse } from "@/client";
 import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
@@ -97,7 +98,7 @@ export function ChatWorkspace({
   readonly onSelectedChannelChange?: (channelId: ChatChannelId) => void;
 }) {
   const profilesResult = useAtomValue(profileAtoms.state);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
 
   if (!selected || !profileState) {
@@ -144,7 +145,7 @@ function ProfileChatWorkspace({
   const [selectedChannelId, setSelectedChannelId] = React.useState<ChatChannelId | undefined>(
     requestedChannelId,
   );
-  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const snapshot = asyncResultValueOrElse(result, () => undefined);
   const selectedChannel =
     snapshot?.channels.find((channel) => channel.id === selectedChannelId) ?? snapshot?.channels[0];
   const selectChannel = React.useCallback(

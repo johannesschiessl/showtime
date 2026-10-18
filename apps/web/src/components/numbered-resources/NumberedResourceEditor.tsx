@@ -1,3 +1,5 @@
+import { asyncResultValueOrElse } from "@/client";
+import { isFailureWithoutValue } from "@/client";
 import * as React from "react";
 import { Exit, type Cause } from "effect";
 import { AsyncResult } from "effect/reactivity";
@@ -70,7 +72,7 @@ export function NumberedResourceEditor<Item extends NumberedResourceEditorItem, 
   onEdit,
   onDelete,
 }: NumberedResourceEditorProps<Item, Error>) {
-  const items = AsyncResult.isSuccess(result) ? result.value : [];
+  const items = asyncResultValueOrElse(result, () => []);
   const [itemToDelete, setItemToDelete] = React.useState<Item>();
   const pluralTitle = capitalize(config.plural);
 
@@ -85,7 +87,7 @@ export function NumberedResourceEditor<Item extends NumberedResourceEditorItem, 
             <EmptyTitle>Loading {config.plural}</EmptyTitle>
           </EmptyHeader>
         </Empty>
-      ) : AsyncResult.isFailure(result) && items.length === 0 ? (
+      ) : isFailureWithoutValue(result) ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">

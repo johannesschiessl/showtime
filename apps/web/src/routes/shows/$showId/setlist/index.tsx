@@ -1,3 +1,5 @@
+import { asyncResultValueOrElse } from "@/client";
+import { isFailureWithoutValue } from "@/client";
 import { useRpcMutation } from "@/hooks/useRpcMutation";
 import * as React from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -53,7 +55,7 @@ function RouteComponent() {
   const result = useAtomValue(songAtoms(typedShowId).songs);
   const reorder = useRpcMutation(songAtoms(typedShowId).reorder);
   const edit = useRpcMutation(songAtoms(typedShowId).edit);
-  const songs = AsyncResult.isSuccess(result) ? result.value : [];
+  const songs = asyncResultValueOrElse(result, () => []);
   const [previewSongs, setPreviewSongs] = React.useState<ReadonlyArray<SongListItem>>(songs);
   const [draggedId, setDraggedId] = React.useState<SongId>();
   const [dragPosition, setDragPosition] = React.useState<DragPosition>();
@@ -250,7 +252,7 @@ function RouteComponent() {
             <EmptyTitle>Loading songs</EmptyTitle>
           </EmptyHeader>
         </Empty>
-      ) : AsyncResult.isFailure(result) && songs.length === 0 ? (
+      ) : isFailureWithoutValue(result) ? (
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">

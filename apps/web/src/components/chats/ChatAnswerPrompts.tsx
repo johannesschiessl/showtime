@@ -1,6 +1,6 @@
+import { asyncResultValueOrElse } from "@/client";
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
 import type { ChatSnapshot, Profile, ShowId } from "@showtime/contracts";
 import { chatAtoms, profileAtoms } from "@/client";
 import { registerChatAnswerDialog } from "@/chats/ChatAnswerDialogPresence";
@@ -21,7 +21,7 @@ export function ChatAnswerPrompts({
   readonly chatOpen: boolean;
 }) {
   const profilesResult = useAtomValue(profileAtoms.state);
-  const profileState = AsyncResult.isSuccess(profilesResult) ? profilesResult.value : undefined;
+  const profileState = asyncResultValueOrElse(profilesResult, () => undefined);
   const { selected } = useSelectedProfile(profileState);
 
   return selected ? (
@@ -47,7 +47,7 @@ function ProfileChatAnswerPrompts({
   readonly profiles: ReadonlyArray<Profile>;
 }) {
   const result = useAtomValue(chatAtoms(showId, profile.id).state);
-  const snapshot = AsyncResult.isSuccess(result) ? result.value : undefined;
+  const snapshot = asyncResultValueOrElse(result, () => undefined);
 
   return (
     <ReadyChatAnswerPrompts

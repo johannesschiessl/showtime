@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
+import { asyncResultValueOrElse } from "@/client";
 import {
   resolveChatPresetTemplate,
   type ChatMessagePart,
@@ -62,15 +62,11 @@ export function useChatPresetResources(showId: ShowId) {
   const microphonesResult = useAtomValue(microphoneAtoms(showId).microphones);
   const mixesResult = useAtomValue(mixAtoms(showId).mixes);
   const microphones = React.useMemo(
-    () =>
-      AsyncResult.isSuccess(microphonesResult)
-        ? microphonesResult.value.filter((item) => !item.deletedAt)
-        : [],
+    () => asyncResultValueOrElse(microphonesResult, () => []).filter((item) => !item.deletedAt),
     [microphonesResult],
   );
   const mixes = React.useMemo(
-    () =>
-      AsyncResult.isSuccess(mixesResult) ? mixesResult.value.filter((item) => !item.deletedAt) : [],
+    () => asyncResultValueOrElse(mixesResult, () => []).filter((item) => !item.deletedAt),
     [mixesResult],
   );
   return { microphones, mixes } as const;
