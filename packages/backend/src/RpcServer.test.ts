@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
-import { ShowtimeRpcs, ShowName } from "@showtime/contracts";
+import { ShowtimeRpcs, ShowName, SongId, SongName, SongArtist } from "@showtime/contracts";
 import { ConnectionManager, makeBackendRuntime } from "./index.js";
 import { ProfileService } from "./profiles/ProfileService.js";
 import { DatabaseSync } from "node:sqlite";
@@ -56,6 +56,86 @@ const tokenForInvitation = async (
 };
 
 describe("Showtime WebSocket RPC", () => {
+  it("refreshes show metadata after resource edits and song overrides after mix deletion", async () => {
+    const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-invalidation-"));
+    tempHomes.add(homeDirectory);
+    const runtime = makeBackendRuntime({
+      host: "127.0.0.1",
+      port: await findAvailablePort(),
+      homeDirectory,
+    });
+    try {
+      const url = await runtime.runPromise(
+        Effect.flatMap(ConnectionManager, (_) => _.rpcWebSocketUrl),
+      );
+      const protocol = RpcClient.layerProtocolSocket().pipe(
+        Layer.provide(NodeSocket.layerWebSocket(url)),
+        Layer.provide(RpcSerialization.layerJson),
+      );
+      const result = await Effect.runPromise(
+        Effect.gen(function* () {
+          const client = yield* RpcClient.make(ShowtimeRpcs);
+          const show = yield* client["shows.create"]({
+            name: ShowName.make("Subscriptions"),
+            color: "blue",
+          });
+          const subscribed = yield* Deferred.make<void>();
+          const [showSnapshots] = yield* Effect.all(
+            [
+              client["shows.list"]().pipe(
+                Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+                Stream.take(2),
+                Stream.runCollect,
+              ),
+              Deferred.await(subscribed).pipe(
+                Effect.andThen(Effect.sleep("2 millis")),
+                Effect.andThen(client["microphones.create"]({ showId: show.id, color: "blue" })),
+              ),
+            ],
+            { concurrency: "unbounded" },
+          );
+          const mix = yield* client["mixes.create"]({ showId: show.id, color: "blue" });
+          const song = yield* client["songs.create"]({
+            showId: show.id,
+            id: SongId.make("song_0000000000000001"),
+            name: SongName.make("Song"),
+            artist: SongArtist.make(""),
+          });
+          yield* client["songs.edit"]({
+            showId: show.id,
+            id: song.id,
+            name: song.name,
+            artist: song.artist,
+            mixAssignments: [],
+            microphoneNames: [],
+            mixNames: [{ mixId: mix.id, name: "Override" }],
+          });
+          const songsSubscribed = yield* Deferred.make<void>();
+          const [songSnapshots] = yield* Effect.all(
+            [
+              client["songs.list"]({ showId: show.id }).pipe(
+                Stream.tap(() => Deferred.succeed(songsSubscribed, undefined)),
+                Stream.take(2),
+                Stream.runCollect,
+              ),
+              Deferred.await(songsSubscribed).pipe(
+                Effect.andThen(client["mixes.delete"]({ showId: show.id, id: mix.id })),
+              ),
+            ],
+            { concurrency: "unbounded" },
+          );
+          return { showSnapshots, songSnapshots };
+        }).pipe(Effect.scoped, Effect.timeout("5 seconds"), Effect.provide(protocol)),
+      );
+      expect(result.showSnapshots[1]![0]!.updatedAt).not.toBe(
+        result.showSnapshots[0]![0]!.updatedAt,
+      );
+      expect(result.songSnapshots[0]![0]!.mixNames).toHaveLength(1);
+      expect(result.songSnapshots[1]![0]!.mixNames ?? []).toEqual([]);
+    } finally {
+      await runtime.dispose();
+    }
+  });
   it("returns a desktop RPC URL reachable through the configured bind address", async () => {
     const homeDirectory = await mkdtemp(path.join(os.tmpdir(), "showtime-rpc-host-home-"));
     tempHomes.add(homeDirectory);
