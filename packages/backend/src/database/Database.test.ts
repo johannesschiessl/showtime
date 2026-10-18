@@ -463,16 +463,45 @@ describe("Showtime database", () => {
     concurrencyTestTimeout,
   );
 
-  it("reclaims an initialization lock left by a terminated process", async () => {
+  it("releases initialization ownership when a process terminates", async () => {
     const home = await makeHome();
     const directory = path.join(home, ".showtime");
-    const lockPath = path.join(directory, `${databaseFileName}.initialize.lock`);
+    const lockPath = path.join(directory, `${databaseFileName}.initialize.db`);
     await mkdir(directory);
-    await writeFile(lockPath, JSON.stringify({ pid: 2_147_483_647, token: "stale-owner" }));
+    const holder = spawn(
+      process.execPath,
+      [
+        "-e",
+        `
+      const { DatabaseSync } = require('node:sqlite');
+      const db = new DatabaseSync(process.argv[1]);
+      db.exec('BEGIN IMMEDIATE');
+      process.stdout.write('locked');
+      setInterval(() => {}, 1000);
+    `,
+        lockPath,
+      ],
+      { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const stopped = new Promise<void>((resolve) => holder.once("exit", () => resolve()));
+    try {
+      await waitFor(
+        new Promise<void>((resolve, reject) => {
+          holder.stdout.once("data", () => resolve());
+          holder.once("error", reject);
+          holder.once("exit", () => reject(new Error("Lock holder exited before acquisition")));
+        }),
+        5_000,
+        "Lock holder did not acquire the initialization lock",
+      );
+    } finally {
+      holder.kill();
+      await stopped;
+    }
 
     await runDatabase(home, Effect.void);
 
-    await expect(stat(lockPath)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(stat(lockPath)).resolves.toBeDefined();
     const verified = new DatabaseSync(path.join(directory, databaseFileName), { readOnly: true });
     try {
       expect(

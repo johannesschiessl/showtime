@@ -1,5 +1,5 @@
 import { SqliteClient, SqliteMigrator } from "@effect/sql-sqlite-node";
-import { Context, DateTime, Effect, Layer, Path, Schema } from "effect";
+import { Context, DateTime, Effect, Exit, Layer, Path, Schema } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { SqlClient } from "effect/sql";
 import { customAlphabet } from "nanoid";
@@ -20,9 +20,8 @@ export const currentMigrations = [
   [3, "chat_reply_deletion"],
 ] as const;
 
-const initializationLockFileName = `${databaseFileName}.initialize.lock`;
+const initializationLockFileName = `${databaseFileName}.initialize.db`;
 const initializationLockWaitMilliseconds = 20_000;
-const malformedLockGraceMilliseconds = 2_000;
 
 const criticalTables = [
   "app_settings",
@@ -333,117 +332,51 @@ const prepareDatabasePath = Effect.fn("ShowtimeDatabasePreflight")(function* () 
   return { directory, filename } as const;
 });
 
-interface InitializationLockOwner {
-  readonly pid: number;
-  readonly token: string;
-}
-
-const parseInitializationLockOwner = (contents: string): InitializationLockOwner | undefined => {
-  try {
-    const parsed = JSON.parse(contents) as Partial<InitializationLockOwner>;
-    return typeof parsed.pid === "number" &&
-      Number.isInteger(parsed.pid) &&
-      parsed.pid > 0 &&
-      typeof parsed.token === "string" &&
-      parsed.token.length > 0
-      ? { pid: parsed.pid, token: parsed.token }
-      : undefined;
-  } catch {
-    return undefined;
-  }
-};
-
-const processIsRunning = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (cause) {
-    return (cause as NodeJS.ErrnoException).code === "EPERM";
-  }
-};
-
 const lockError = (message: string, cause?: unknown) =>
-  new DatabaseInitializationError({
-    message,
-    stage: "initialization-lock",
-    cause,
-  });
+  new DatabaseInitializationError({ message, stage: "initialization-lock", cause });
 
 const acquireInitializationLock = Effect.fn("ShowtimeDatabaseAcquireInitializationLock")(function* (
   lockPath: string,
 ) {
-  const fs = yield* FileSystem;
-  const token = customAlphabet(idAlphabet, idSuffixLength)();
-  const owner = { pid: process.pid, token } satisfies InitializationLockOwner;
+  const db = yield* Effect.try({
+    try: () => new DatabaseSync(lockPath),
+    catch: (cause) => lockError("Could not open the database initialization lock.", cause),
+  });
   const startedAt = Date.now();
-
-  while (true) {
-    const acquired = yield* fs
-      .writeFileString(lockPath, JSON.stringify(owner), { flag: "wx", mode: 0o600 })
-      .pipe(
-        Effect.as(true),
+  // SQLite's OS lock is released on process exit. The lock file is never renamed or deleted.
+  return yield* Effect.gen(function* () {
+    db.exec("PRAGMA busy_timeout = 0");
+    while (true) {
+      const acquired = yield* Effect.try({
+        try: () => {
+          db.exec("BEGIN IMMEDIATE");
+          return true;
+        },
+        catch: (cause) => cause,
+      }).pipe(
         Effect.catch((cause) =>
-          cause.reason._tag === "AlreadyExists"
+          cause instanceof Error && "errcode" in cause && cause.errcode === 5
             ? Effect.succeed(false)
-            : Effect.fail(lockError("Could not create the database initialization lock.", cause)),
+            : Effect.fail(lockError("Could not acquire the database initialization lock.", cause)),
         ),
       );
-    if (acquired) return owner;
-
-    const existingOwner = yield* fs.readFileString(lockPath).pipe(
-      Effect.map(parseInitializationLockOwner),
-      Effect.catch((cause) =>
-        cause.reason._tag === "NotFound"
-          ? Effect.succeed(undefined)
-          : Effect.fail(lockError("Could not read the database initialization lock.", cause)),
-      ),
-    );
-    const elapsed = Date.now() - startedAt;
-    const reclaim = existingOwner
-      ? !processIsRunning(existingOwner.pid)
-      : elapsed >= malformedLockGraceMilliseconds;
-
-    if (reclaim) {
-      const stalePath = `${lockPath}.stale-${token}`;
-      const renamed = yield* fs.rename(lockPath, stalePath).pipe(
-        Effect.as(true),
-        Effect.catch((cause) =>
-          cause.reason._tag === "NotFound"
-            ? Effect.succeed(false)
-            : Effect.fail(
-                lockError("Could not reclaim a stale database initialization lock.", cause),
-              ),
-        ),
-      );
-      if (renamed)
-        yield* fs
-          .remove(stalePath, { force: true })
-          .pipe(
-            Effect.mapError((cause) =>
-              lockError("Could not remove a stale database initialization lock.", cause),
-            ),
-          );
-      continue;
+      if (acquired) return db;
+      if (Date.now() - startedAt >= initializationLockWaitMilliseconds)
+        return yield* lockError(
+          "Timed out waiting for another Showtime process to initialize the database.",
+        );
+      yield* Effect.sleep("25 millis");
     }
-
-    if (elapsed >= initializationLockWaitMilliseconds)
-      return yield* lockError(
-        "Timed out waiting for another Showtime process to initialize the database.",
-      );
-    yield* Effect.sleep("25 millis");
-  }
+  }).pipe(
+    Effect.onExit((exit) =>
+      Effect.sync(() => {
+        if (Exit.isFailure(exit)) db.close();
+      }),
+    ),
+  );
 });
 
-const releaseInitializationLock = (lockPath: string, owner: InitializationLockOwner) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem;
-    const existingOwner = yield* fs.readFileString(lockPath).pipe(
-      Effect.map(parseInitializationLockOwner),
-      Effect.catch(() => Effect.succeed(undefined)),
-    );
-    if (existingOwner?.token === owner.token)
-      yield* fs.remove(lockPath, { force: true }).pipe(Effect.ignore);
-  });
+const releaseInitializationLock = (db: DatabaseSync) => Effect.sync(() => db.close());
 
 const clientLayer = Layer.unwrap(
   prepareDatabasePath().pipe(
@@ -608,7 +541,7 @@ const initialize = Effect.fn("ShowtimeDatabaseInitialize")(function* () {
           if (yield* fs.exists(candidate)) yield* fs.chmod(candidate, 0o600).pipe(Effect.ignore);
         return DatabaseReady.of({});
       }),
-    (owner) => releaseInitializationLock(lockPath, owner),
+    (db) => releaseInitializationLock(db),
   );
 });
 
