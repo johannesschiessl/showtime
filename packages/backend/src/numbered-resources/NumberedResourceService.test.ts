@@ -61,7 +61,8 @@ const editAgainst = async (current: ShowDocument, name?: string) => {
       Effect.provideService(
         ShowRepository,
         ShowRepository.of({
-          list: Effect.succeed([original]),
+          summaries: Effect.succeed([]),
+          ensureExists: () => Effect.void,
           findById: () => Effect.succeed(original),
           insert: () => Effect.void,
           delete: () => Effect.void,

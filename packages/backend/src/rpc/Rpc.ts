@@ -59,7 +59,7 @@ const handlers = ShowtimeRpcs.toLayer(
       "chats.state": ({ showId, profileId }) =>
         sync.query(
           chatsSyncKey(showId),
-          showRepository.findById(showId).pipe(Effect.andThen(chats.state(showId, profileId))),
+          showRepository.ensureExists(showId).pipe(Effect.andThen(chats.state(showId, profileId))),
         ),
       "chats.createChannel": ({ showId, name }) =>
         sync.mutation(chatsSyncKey(showId), chats.createChannel({ showId, name })),

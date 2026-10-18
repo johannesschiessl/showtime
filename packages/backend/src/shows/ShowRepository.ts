@@ -19,6 +19,7 @@ import {
   type SongMixName,
   type SongMicrophoneName,
   type SongMixAssignment,
+  type ShowSummary,
 } from "@showtime/contracts";
 import { DatabaseReady } from "../database/Database.js";
 import { isDeepStrictEqual } from "node:util";
@@ -31,7 +32,8 @@ export interface ShowDocument {
 }
 
 interface ShowRepositoryShape {
-  readonly list: Effect.Effect<ReadonlyArray<ShowDocument>, RpcError>;
+  readonly summaries: Effect.Effect<ReadonlyArray<ShowSummary>, RpcError>;
+  readonly ensureExists: (id: ShowId) => Effect.Effect<void, RpcError>;
   readonly findById: (id: ShowId) => Effect.Effect<ShowDocument, RpcError>;
   readonly insert: (document: ShowDocument) => Effect.Effect<void, RpcError>;
   readonly update: (
@@ -358,13 +360,6 @@ const make = Effect.fn("ShowRepository.make")(function* () {
     yield* insertChildren(document);
   });
 
-  const list = sql.withTransaction(
-    Effect.gen(function* () {
-      const rows = yield* findShows({});
-      return yield* Effect.forEach(rows, loadDocument);
-    }),
-  );
-
   const findById: ShowRepositoryShape["findById"] = (id) =>
     sql
       .withTransaction(loadById(id))
@@ -412,7 +407,25 @@ const make = Effect.fn("ShowRepository.make")(function* () {
     );
 
   return ShowRepository.of({
-    list: list.pipe(Effect.mapError((cause) => rpcError("Could not list shows.", cause))),
+    summaries: findShows({}).pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          createdAt: DateTime.formatIso(row.createdAt),
+          updatedAt: DateTime.formatIso(row.updatedAt),
+        })),
+      ),
+      Effect.mapError((cause) => rpcError("Could not list shows.", cause)),
+    ),
+    ensureExists: (id) =>
+      sql`SELECT 1 FROM shows WHERE id = ${id}`.pipe(
+        Effect.flatMap((rows) =>
+          rows.length > 0 ? Effect.void : Effect.fail(rpcError("Show not found.")),
+        ),
+        Effect.mapError((cause) =>
+          cause instanceof RpcError ? cause : rpcError("Could not find show.", cause),
+        ),
+      ),
     findById,
     insert: (document) =>
       sql
