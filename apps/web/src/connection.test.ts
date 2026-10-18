@@ -20,6 +20,8 @@ const clientProfile = "profile_0000000000000000";
 
 describe("browser connection persistence", () => {
   it("accepts only safe Showtime connection links", () => {
+    const generated = `http://showtime-foh.local:8585/#pair=${pairingToken}&profile=${clientProfile}`;
+    expect(parseShowtimePairingUrl(generated, "https://app.example/")).toBe(generated);
     expect(
       parseShowtimePairingUrl(
         `http://showtime-foh.local:8585/#pair=${pairingToken}`,

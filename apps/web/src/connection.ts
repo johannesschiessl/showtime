@@ -13,6 +13,11 @@ import { Schema } from "effect";
 
 const pairingTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 const fragmentPrefix = "#pair=";
+const pairingTokenFromFragment = (hash: string) => {
+  if (!hash.startsWith(fragmentPrefix)) return undefined;
+  const token = new URLSearchParams(hash.slice(1)).get("pair") ?? "";
+  return pairingTokenPattern.test(token) ? token : undefined;
+};
 const connectionRequestTimeoutMs = 5_000;
 
 const requestWithTimeout = async (
@@ -64,8 +69,7 @@ export const parseShowtimePairingUrl = (value: string, baseUrl = window.location
     const url = new URL(value, baseUrl);
     if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
     if (url.username || url.password) return undefined;
-    if (!url.hash.startsWith(fragmentPrefix)) return undefined;
-    if (!pairingTokenPattern.test(url.hash.slice(fragmentPrefix.length))) return undefined;
+    if (!pairingTokenFromFragment(url.hash)) return undefined;
     return url.href;
   } catch {
     return undefined;
@@ -118,11 +122,10 @@ export const capturePairingFragment = async (
   request: typeof fetch = fetch,
 ): Promise<PairingResult> => {
   if (!location.hash.startsWith(fragmentPrefix)) return { status: "none" };
-  const pairingParameters = new URLSearchParams(location.hash.slice(1));
-  const token = pairingParameters.get("pair") ?? "";
+  const token = pairingTokenFromFragment(location.hash);
   const removePairingFragment = () =>
     history.replaceState(null, "", `${location.pathname}${location.search}#/`);
-  if (!pairingTokenPattern.test(token)) {
+  if (!token) {
     removePairingFragment();
     return { status: "failed", message: "This connection link is invalid." };
   }
